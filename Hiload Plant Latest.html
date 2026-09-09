@@ -569,7 +569,7 @@
         <div id="modal-body"></div>
         <menu class="actions">
           <button value="cancel" class="btn">Cancel</button>
-          <button value="submit" class="btn primary" id="modal-submit">Save</button>
+          <button type="button" value="submit" class="btn primary" id="modal-submit">Save</button>
         </menu>
       </form>
     </dialog>
@@ -1565,6 +1565,18 @@
         var modalSubmit = byId('modal-submit');
         if (modalClose) modalClose.addEventListener('click', function(){ modal.close('cancel'); });
 
+        function refreshPlantUi(){
+          renderPlants();
+          renderPlantSelectForHire();
+          renderHires();
+          renderMaintenanceLists();
+          renderHireFilters();
+          renderMonthEndSection('yellow'); renderMonthEndSection('truck'); renderMonthEndSection('bakkie');
+          renderMaintenanceReportFilters();
+          renderWarningsPanel();
+          updateMaintBadge();
+        }
+
         function normMaintType(t){ return String(t || '').trim().toLowerCase(); }
 
         function renderMaintTypeHistoryPreview(plantId, typeKey, targetEl){
@@ -1954,13 +1966,98 @@
         }
 
         function openEditPlantModal(plant){
-          // (kept from previous working version; no changes needed for reports/site fix)
           modalTitle.textContent = 'Edit Plant';
+          var currentUnit = (plant.category === 'truck' || plant.category === 'bakkie')
+            ? 'km'
+            : (plant.rateUnit === 'hour' ? 'hour' : 'day');
+          var categoryOptions = [
+            { value:'yellow', label:'Yellow Plant' },
+            { value:'small', label:'Small Plant' },
+            { value:'truck', label:'Truck' },
+            { value:'bakkie', label:'Bakkie' }
+          ].map(function(opt){
+            return '<option value="'+opt.value+'"'+(opt.value === plant.category ? ' selected' : '')+'>'+opt.label+'</option>';
+          }).join('');
+          var subTypeOptions = '<option value="">Select type</option>' + SMALL_SUBS.map(function(s){
+            return '<option value="'+s.value+'"'+(s.value === (plant.subType || '') ? ' selected' : '')+'>'+escapeHtml(s.label)+'</option>';
+          }).join('');
+
           modalBody.innerHTML =
-            '<p class="muted">Edit Plant modal unchanged in this build. Use your existing working version if needed.</p>';
-          modalSubmit.textContent = 'Close';
+            '<div class="field"><label for="m-ep-name">Plant name</label><input id="m-ep-name" autocomplete="off" value="'+escapeAttr(plant.name || '')+'" /></div>' +
+            '<div class="field"><label for="m-ep-category">Category</label><select id="m-ep-category">'+categoryOptions+'</select><small class="muted">Changing category keeps the same plant record, hires, maintenance history and service settings.</small></div>' +
+            '<div class="field"><label for="m-ep-make">Make</label><input id="m-ep-make" autocomplete="off" value="'+escapeAttr(plant.make || '')+'" /></div>' +
+            '<div class="field"><label for="m-ep-model">Model</label><input id="m-ep-model" autocomplete="off" value="'+escapeAttr(plant.model || '')+'" /></div>' +
+            '<div class="field"><label for="m-ep-serial">Serial/Reg</label><input id="m-ep-serial" autocomplete="off" value="'+escapeAttr(plant.serial || '')+'" /></div>' +
+            '<div class="field'+(plant.category === 'small' ? '' : ' hidden')+'" id="m-ep-subtype-wrap"><label for="m-ep-subtype">Small Plant type</label><select id="m-ep-subtype">'+subTypeOptions+'</select></div>' +
+            '<div class="inline">' +
+              '<div class="field" style="flex:1 1 180px;min-width:180px"><label for="m-ep-rate">Hire rate</label><input id="m-ep-rate" type="number" step="0.01" min="0" autocomplete="off" inputmode="decimal" value="'+escapeAttr(plant.rate || '')+'" /></div>' +
+              '<div class="field" style="flex:1 1 160px;min-width:160px"><label for="m-ep-rate-unit">Rate unit</label><select id="m-ep-rate-unit"><option value="day">Per day</option><option value="hour">Per hour</option><option value="km">Per km</option></select></div>' +
+            '</div>' +
+            '<div id="m-ep-message" class="muted" aria-live="polite"></div>';
+
+          modalSubmit.textContent = 'Save';
           modal.showModal();
-          modalSubmit.onclick = function(){ modal.close('cancel'); };
+          var categorySel = byId('m-ep-category');
+          var subtypeWrap = byId('m-ep-subtype-wrap');
+          var subtypeSel = byId('m-ep-subtype');
+          var rateUnitSel = byId('m-ep-rate-unit');
+          var msg = byId('m-ep-message');
+
+          function syncCategoryFields(){
+            var category = categorySel.value;
+            var isSmall = category === 'small';
+            var isVehicle = category === 'truck' || category === 'bakkie';
+            subtypeWrap.classList.toggle('hidden', !isSmall);
+            if (!isSmall) subtypeSel.value = '';
+            rateUnitSel.disabled = isVehicle;
+            hideOption(rateUnitSel, 'km', !isVehicle);
+            hideOption(rateUnitSel, 'day', isVehicle);
+            hideOption(rateUnitSel, 'hour', isVehicle);
+            if (isVehicle) rateUnitSel.value = 'km';
+            else if (rateUnitSel.value === 'km') rateUnitSel.value = currentUnit === 'hour' ? 'hour' : 'day';
+            if (msg) msg.textContent = isVehicle ? 'Trucks and Bakkies always use per-km rates.' : 'Yellow Plant and Small Plant may use per-day or per-hour rates.';
+          }
+
+          rateUnitSel.value = currentUnit;
+          syncCategoryFields();
+          categorySel.addEventListener('change', syncCategoryFields);
+
+          modalSubmit.onclick = function(){
+            var nextCategory = categorySel.value;
+            var name = String(byId('m-ep-name').value || '').trim();
+            var make = String(byId('m-ep-make').value || '').trim();
+            var model = String(byId('m-ep-model').value || '').trim();
+            var serial = String(byId('m-ep-serial').value || '').trim();
+            var subType = nextCategory === 'small' ? String(subtypeSel.value || '').trim() : '';
+            var rateRaw = String(byId('m-ep-rate').value || '').trim();
+            var rateNum = rateRaw === '' ? null : parseFloat(rateRaw);
+            var rateUnit = (nextCategory === 'truck' || nextCategory === 'bakkie') ? 'km' : (rateUnitSel.value === 'hour' ? 'hour' : 'day');
+
+            if (!name) { alert('Plant name is required.'); byId('m-ep-name').focus(); return; }
+            if (nextCategory === 'small' && !subType) { alert('Please select a Small Plant type.'); subtypeSel.focus(); return; }
+            if (rateRaw !== '' && (!isFinite(rateNum) || rateNum < 0)) { alert('Hire rate must be zero or more.'); byId('m-ep-rate').focus(); return; }
+            if (nextCategory !== plant.category) {
+              var fromLabel = categoryLabel(plant.category);
+              var toLabel = categoryLabel(nextCategory);
+              if (!confirm('Change category from ' + fromLabel + ' to ' + toLabel + '? Existing hire and maintenance history will be kept.')) return;
+            }
+
+            var idx = state.plants.findIndex(function(p){ return p.id === plant.id; });
+            if (idx < 0) return;
+            state.plants[idx] = Object.assign({}, state.plants[idx], {
+              name: name,
+              category: nextCategory,
+              make: make,
+              model: model,
+              serial: serial,
+              subType: subType,
+              rate: rateNum === null ? '' : rateNum.toFixed(2),
+              rateUnit: rateUnit
+            });
+            save(LS_KEYS.plants, state.plants);
+            refreshPlantUi();
+            modal.close('submit');
+          };
         }
 
         function openEditHireModal(hire){
@@ -2759,7 +2856,130 @@
 
         // ---------- Rate calc ----------
         function openRateCalcModal(plant){
-          alert('Rate calculator retained from your earlier version. If you need it re-inserted into this "complete code" too, say so and I will include it (it is long).');
+          var defaultUnit = (plant.category === 'truck' || plant.category === 'bakkie')
+            ? 'km'
+            : (plant.rateUnit === 'hour' ? 'hour' : 'day');
+          var defaultRate = (plant.rate !== undefined && plant.rate !== null && String(plant.rate).trim() !== '') ? String(plant.rate).trim() : '';
+          var subTypeText = (plant.category === 'small' && plant.subType) ? (' • ' + smallSubLabel(plant.subType)) : '';
+
+          modalTitle.textContent = 'Rate Calculator';
+          modalBody.innerHTML =
+            '<p class="muted" style="margin-top:0">'+escapeHtml(displayNameWithReg(plant))+' • '+escapeHtml(categoryLabel(plant.category))+escapeHtml(subTypeText)+'</p>' +
+            '<div class="inline">' +
+              '<div class="field" style="flex:1 1 180px;min-width:180px"><label for="m-rc-rate">Rate</label><input id="m-rc-rate" type="number" step="0.01" min="0" autocomplete="off" inputmode="decimal" value="'+escapeAttr(defaultRate)+'" /></div>' +
+              '<div class="field" style="flex:1 1 160px;min-width:160px"><label for="m-rc-unit">Rate unit</label><select id="m-rc-unit"><option value="day">Per day</option><option value="hour">Per hour</option><option value="km">Per km</option></select></div>' +
+            '</div>' +
+            '<div class="inline" id="m-rc-days-wrap">' +
+              '<div class="field" style="flex:1 1 180px;min-width:180px"><label for="m-rc-from">From</label><input id="m-rc-from" type="date" autocomplete="off" /></div>' +
+              '<div class="field" style="flex:1 1 180px;min-width:180px"><label for="m-rc-to">To</label><input id="m-rc-to" type="date" autocomplete="off" /></div>' +
+            '</div>' +
+            '<div class="field hidden" id="m-rc-hours-wrap"><label for="m-rc-hours">Hours</label><input id="m-rc-hours" type="number" step="0.1" min="0" autocomplete="off" inputmode="decimal" /></div>' +
+            '<div class="field hidden" id="m-rc-kms-wrap"><label for="m-rc-kms">Kilometres</label><input id="m-rc-kms" type="number" step="0.1" min="0" autocomplete="off" inputmode="decimal" /></div>' +
+            '<div class="field"><label><input id="m-rc-save-rate" type="checkbox" /> Save this rate and unit back to the plant record</label></div>' +
+            '<div id="m-rc-result" class="mini-card" aria-live="polite"><div class="muted">Enter the details above, then click Calculate.</div></div>';
+
+          modalSubmit.textContent = 'Calculate';
+          modal.showModal();
+
+          var unitSel = byId('m-rc-unit');
+          var rateInput = byId('m-rc-rate');
+          var daysWrap = byId('m-rc-days-wrap');
+          var fromInput = byId('m-rc-from');
+          var toInput = byId('m-rc-to');
+          var hoursWrap = byId('m-rc-hours-wrap');
+          var hoursInput = byId('m-rc-hours');
+          var kmsWrap = byId('m-rc-kms-wrap');
+          var kmsInput = byId('m-rc-kms');
+          var saveRateChk = byId('m-rc-save-rate');
+          var result = byId('m-rc-result');
+
+          function syncRateCalcFields(){
+            var unit = unitSel.value;
+            var isVehicle = plant.category === 'truck' || plant.category === 'bakkie';
+            unitSel.disabled = isVehicle;
+            hideOption(unitSel, 'km', !isVehicle);
+            hideOption(unitSel, 'day', isVehicle);
+            hideOption(unitSel, 'hour', isVehicle);
+            if (isVehicle) unitSel.value = 'km';
+            else if (unitSel.value === 'km') unitSel.value = 'day';
+            unit = unitSel.value;
+            daysWrap.classList.toggle('hidden', unit !== 'day');
+            hoursWrap.classList.toggle('hidden', unit !== 'hour');
+            kmsWrap.classList.toggle('hidden', unit !== 'km');
+          }
+
+          unitSel.value = defaultUnit;
+          syncRateCalcFields();
+          unitSel.addEventListener('change', syncRateCalcFields);
+
+          modalSubmit.onclick = function(){
+            var unit = (plant.category === 'truck' || plant.category === 'bakkie') ? 'km' : unitSel.value;
+            var rateRaw = String(rateInput.value || '').trim();
+            var rate = parseFloat(rateRaw);
+            if (rateRaw === '' || !isFinite(rate) || rate < 0) {
+              alert('Please enter a valid non-negative rate.');
+              rateInput.focus();
+              return;
+            }
+
+            var amount = 0;
+            var formula = '';
+
+            if (unit === 'day') {
+              var fromVal = String(fromInput.value || '');
+              var toVal = String(toInput.value || '');
+              if (!fromVal || !toVal) {
+                alert('Please enter both From and To dates.');
+                (!fromVal ? fromInput : toInput).focus();
+                return;
+              }
+              if (toVal < fromVal) {
+                alert('To date cannot be before From date.');
+                toInput.focus();
+                return;
+              }
+              var weekdays = countWeekdaysInclusive(parseISO(fromVal), parseISO(toVal));
+              amount = rate * weekdays;
+              formula = toMoney(rate) + rateSuffix(unit) + ' × ' + weekdays + ' weekday' + (weekdays === 1 ? '' : 's') + ' (' + fromVal + ' to ' + toVal + ') = ' + toMoney(amount);
+            } else if (unit === 'hour') {
+              var hoursRaw = String(hoursInput.value || '').trim();
+              var hours = parseFloat(hoursRaw);
+              if (hoursRaw === '' || !isFinite(hours) || hours < 0) {
+                alert('Please enter valid hours.');
+                hoursInput.focus();
+                return;
+              }
+              amount = rate * hours;
+              formula = toMoney(rate) + rateSuffix(unit) + ' × ' + String(hours) + ' hours = ' + toMoney(amount);
+            } else {
+              var kmsRaw = String(kmsInput.value || '').trim();
+              var kms = parseFloat(kmsRaw);
+              if (kmsRaw === '' || !isFinite(kms) || kms < 0) {
+                alert('Please enter valid kilometres.');
+                kmsInput.focus();
+                return;
+              }
+              amount = rate * kms;
+              formula = toMoney(rate) + rateSuffix(unit) + ' × ' + String(kms) + ' km = ' + toMoney(amount);
+            }
+
+            var savedText = '';
+            if (saveRateChk.checked) {
+              var idx = state.plants.findIndex(function(p){ return p.id === plant.id; });
+              if (idx >= 0) {
+                state.plants[idx] = Object.assign({}, state.plants[idx], { rate: rate.toFixed(2), rateUnit: unit });
+                save(LS_KEYS.plants, state.plants);
+                refreshPlantUi();
+                plant = state.plants[idx];
+                savedText = '<div class="muted" style="margin-top:.35rem">Saved '+toMoney(rate)+rateSuffix(unit)+' to this plant.</div>';
+              }
+            }
+
+            result.innerHTML =
+              '<div><strong>Amount:</strong> ' + toMoney(amount) + '</div>' +
+              '<div class="muted" style="margin-top:.35rem">Formula: ' + escapeHtml(formula) + '</div>' +
+              savedText;
+          };
         }
 
         // ---------- Hire plant select ----------
