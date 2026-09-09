@@ -672,14 +672,14 @@
               </div>
               <div>
                 <strong>Data storage</strong>
-                <p class="muted" style="margin:.25rem 0 0">All data is saved in your browser (local device). Use Export to save a backup, Import to restore on another PC, or Reset to clear.</p>
+                <p class="muted" style="margin:.25rem 0 0">Browser mode still saves data in your browser on this device. In the Windows desktop app, SQLite now becomes the live day-to-day data store after startup, import or migration. Use Export to save a .json backup, Import to restore, or Reset to clear this device.</p>
               </div>
             </div>
           </div>
 
           <div class="card">
             <h3>Export / Import</h3>
-            <p class="muted">Export saves a .json file containing all Sites, Plant, Hires, Maintenance, Invoices, invoice document references, Month‑end readings, Service settings and Lifetime totals. Import loads a previously exported file. Importing will replace current data on this device.</p>
+            <p class="muted">Export saves a .json file containing all Sites, Plant, Hires, Maintenance, Invoices, invoice document references, Month‑end readings, Service settings and Lifetime totals. In desktop mode, export reflects the current live SQLite-backed data that is loaded in the app. Import loads a previously exported file. Importing will replace current data on this device.</p>
             <div class="actions">
               <button id="export-data-btn" class="btn">Export data (.json)</button>
               <button id="import-data-btn" class="btn primary" aria-controls="import-file">Import data (.json)</button>
@@ -709,11 +709,11 @@
                 <input id="desktop-import-file" type="file" accept="application/json" />
               </div>
               <div class="actions">
-                <button id="desktop-refresh-btn" type="button" class="btn">Refresh desktop status</button>
+                <button id="desktop-refresh-btn" type="button" class="btn">Reload live data from SQLite</button>
                 <button id="desktop-import-btn" type="button" class="btn primary">Import Browser Backup into SQLite</button>
                 <button id="desktop-export-db-btn" type="button" class="btn">Create SQLite backup copy</button>
               </div>
-              <p class="muted" id="desktop-db-message">In this first desktop foundation release, your normal day-to-day data screens still use browser local storage. Use this section to set up SQLite, import your browser backup safely, and create SQLite backup copies.</p>
+              <p class="muted" id="desktop-db-message">Desktop mode uses SQLite as the live data store after it loads or migrates your data. Browser mode keeps using browser storage as before.</p>
             </div>
           </div>
 
@@ -774,18 +774,84 @@
           invoiceDocs: 'hiph_invoice_docs'
         };
 
+        var STATE_CONFIG = [
+          { prop: 'sites', key: LS_KEYS.sites, kind: 'array' },
+          { prop: 'plants', key: LS_KEYS.plants, kind: 'array' },
+          { prop: 'hires', key: LS_KEYS.hires, kind: 'array' },
+          { prop: 'maintenance', key: LS_KEYS.maintenance, kind: 'array' },
+          { prop: 'siteUsage', key: LS_KEYS.siteUsage, kind: 'object' },
+          { prop: 'meters', key: LS_KEYS.meters, kind: 'object' },
+          { prop: 'plantService', key: LS_KEYS.plantService, kind: 'object' },
+          { prop: 'rateModels', key: LS_KEYS.rateModels, kind: 'object' },
+          { prop: 'alerts', key: LS_KEYS.alerts, kind: 'object' },
+          { prop: 'suppliers', key: LS_KEYS.suppliers, kind: 'array' },
+          { prop: 'invoices', key: LS_KEYS.invoices, kind: 'array' },
+          { prop: 'invoiceDocs', key: LS_KEYS.invoiceDocs, kind: 'object' }
+        ];
+
+        function stateDefaultValue(kind){
+          return kind === 'array' ? [] : {};
+        }
+
+        function normalizeStateValue(entry, value){
+          if (entry.kind === 'array') return Array.isArray(value) ? value : [];
+          return (value && typeof value === 'object' && !Array.isArray(value)) ? value : {};
+        }
+
+        function loadStateSlice(entry){
+          return normalizeStateValue(entry, load(entry.key, stateDefaultValue(entry.kind)));
+        }
+
+        function saveLocalOnly(key, value){
+          try { localStorage.setItem(key, JSON.stringify(value)); } catch(e){}
+        }
+
+        function syncStateToLocalCache(){
+          STATE_CONFIG.forEach(function(entry){
+            saveLocalOnly(entry.key, state[entry.prop]);
+          });
+        }
+
+        function buildCurrentStateDataBlock(){
+          var data = {};
+          STATE_CONFIG.forEach(function(entry){
+            data[entry.key] = normalizeStateValue(entry, state[entry.prop]);
+          });
+          return data;
+        }
+
+        function replaceStateFromDataBlock(dataBlock){
+          STATE_CONFIG.forEach(function(entry){
+            var raw = dataBlock && Object.prototype.hasOwnProperty.call(dataBlock, entry.key)
+              ? dataBlock[entry.key]
+              : stateDefaultValue(entry.kind);
+            state[entry.prop] = normalizeStateValue(entry, raw);
+          });
+          syncStateToLocalCache();
+          ensureInvoiceStateShape();
+        }
+
+        function hasStateData(dataBlock){
+          var source = dataBlock || buildCurrentStateDataBlock();
+          return STATE_CONFIG.some(function(entry){
+            var value = normalizeStateValue(entry, source[entry.key]);
+            return entry.kind === 'array' ? value.length > 0 : Object.keys(value).length > 0;
+          });
+        }
+
         var state = {
-          sites: load(LS_KEYS.sites, []),
-          plants: load(LS_KEYS.plants, []),
-          hires: load(LS_KEYS.hires, []),
-          maintenance: load(LS_KEYS.maintenance, []),
-          siteUsage: load(LS_KEYS.siteUsage, {}) || {},
-          meters: load(LS_KEYS.meters, {}) || {},
-          plantService: load(LS_KEYS.plantService, {}) || {},
-          rateModels: load(LS_KEYS.rateModels, {}) || {},
-          suppliers: load(LS_KEYS.suppliers, []) || [],
-          invoices: load(LS_KEYS.invoices, []) || [],
-          invoiceDocs: load(LS_KEYS.invoiceDocs, {}) || {}
+          sites: loadStateSlice(STATE_CONFIG[0]),
+          plants: loadStateSlice(STATE_CONFIG[1]),
+          hires: loadStateSlice(STATE_CONFIG[2]),
+          maintenance: loadStateSlice(STATE_CONFIG[3]),
+          siteUsage: loadStateSlice(STATE_CONFIG[4]),
+          meters: loadStateSlice(STATE_CONFIG[5]),
+          plantService: loadStateSlice(STATE_CONFIG[6]),
+          rateModels: loadStateSlice(STATE_CONFIG[7]),
+          alerts: loadStateSlice(STATE_CONFIG[8]),
+          suppliers: loadStateSlice(STATE_CONFIG[9]),
+          invoices: loadStateSlice(STATE_CONFIG[10]),
+          invoiceDocs: loadStateSlice(STATE_CONFIG[11])
         };
 
         // ---------- Constants ----------
@@ -815,7 +881,8 @@
           try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; }
         }
         function save(key, value){
-          try { localStorage.setItem(key, JSON.stringify(value)); } catch(e){}
+          saveLocalOnly(key, value);
+          scheduleDesktopStateSave();
         }
 
         function scrollToTop(behavior){
@@ -1927,7 +1994,8 @@
         }
         function persistInvoiceDocs(){
           try {
-            localStorage.setItem(LS_KEYS.invoiceDocs, JSON.stringify(state.invoiceDocs));
+            saveLocalOnly(LS_KEYS.invoiceDocs, state.invoiceDocs);
+            scheduleDesktopStateSave();
             return true;
           } catch(e) {
             return false;
@@ -3643,10 +3711,30 @@
         var desktopImportBtn = byId('desktop-import-btn');
         var desktopExportDbBtn = byId('desktop-export-db-btn');
         var desktopIsTauri = false;
+        var desktopStateReady = false;
+        var desktopStateHydrating = false;
+        var desktopSaveTimer = null;
+        var desktopSaveChain = Promise.resolve();
+        var desktopMessageText = '';
 
         function getTauriInvoke(){
           if (!window || !window.__TAURI__ || !window.__TAURI__.core || typeof window.__TAURI__.core.invoke !== 'function') return null;
           return window.__TAURI__.core.invoke;
+        }
+
+        function setDesktopMessageText(text){
+          desktopMessageText = String(text || '');
+          if (desktopMessage) desktopMessage.textContent = desktopMessageText;
+        }
+
+        function formatDesktopLiveCounts(counts){
+          counts = counts || {};
+          return 'Sites: ' + (counts.hiph_sites || 0) +
+            ', Plant: ' + (counts.hiph_plants || 0) +
+            ', Hires: ' + (counts.hiph_hires || 0) +
+            ', Maintenance: ' + (counts.hiph_maintenance || 0) +
+            ', Suppliers: ' + (counts.hiph_suppliers || 0) +
+            ', Invoices: ' + (counts.hiph_invoices || 0) + '.';
         }
 
         function setDesktopButtonState(enabled){
@@ -3658,17 +3746,18 @@
 
         function renderDesktopBrowserMode(){
           desktopIsTauri = false;
+          desktopStateReady = true;
           setDesktopButtonState(false);
           if (desktopModeText) desktopModeText.textContent = 'Browser mode detected (not the desktop app).';
           if (desktopDbStatus) desktopDbStatus.textContent = 'SQLite is available only when this app runs as the Tauri Windows desktop app.';
           if (desktopDocsStatus) desktopDocsStatus.textContent = 'Documents folder is available only in desktop mode.';
           if (desktopBackupStatus) desktopBackupStatus.textContent = 'SQLite backup folder is available only in desktop mode.';
-          if (desktopMessage) desktopMessage.textContent = 'You can keep using this browser app as normal. To use SQLite, open this same app through the new Windows desktop app.';
+          setDesktopMessageText('You can keep using this browser app as normal. To use SQLite, open this same app through the Windows desktop app.');
         }
 
         function renderDesktopError(err){
           var txt = (err && err.message) ? err.message : String(err || 'Unknown error');
-          if (desktopMessage) desktopMessage.textContent = 'Desktop action failed: ' + txt;
+          setDesktopMessageText('Desktop / Database action failed: ' + txt);
         }
 
         function refreshDesktopStatus(){
@@ -3679,7 +3768,8 @@
             desktopIsTauri = true;
             if (desktopModeText) desktopModeText.textContent = 'Desktop mode: Yes (Tauri app running).';
             if (desktopDbStatus) {
-              desktopDbStatus.textContent = (status.databaseExists ? 'Ready' : 'Created now') + ': ' + status.databasePath;
+              desktopDbStatus.textContent = (status.databaseExists ? 'Ready' : 'Created now') + ': ' + status.databasePath +
+                (status.hasLiveData ? ' — Live SQLite data found (' + formatDesktopLiveCounts(status.liveCounts) + ')' : ' — No live SQLite records saved yet.');
             }
             if (desktopDocsStatus) {
               desktopDocsStatus.textContent = (status.documentsExists ? 'Ready' : 'Created now') + ': ' + status.documentsPath;
@@ -3687,13 +3777,85 @@
             if (desktopBackupStatus) {
               desktopBackupStatus.textContent = (status.backupsExists ? 'Ready' : 'Created now') + ': ' + status.backupsPath;
             }
-            if (desktopMessage) {
-              desktopMessage.textContent = 'Important: in this first desktop foundation release, the normal screens still save daily records in browser local storage. SQLite import/backup is now available here as the migration foundation.';
+            if (!desktopMessageText) {
+              setDesktopMessageText('Desktop mode uses SQLite as the live data store after load, import or migration. Browser mode still uses browser storage.');
+            } else if (desktopMessage) {
+              desktopMessage.textContent = desktopMessageText;
             }
             setDesktopButtonState(true);
           }).catch(function(err){
             renderDesktopError(err);
             setDesktopButtonState(false);
+          });
+        }
+
+        function saveDesktopStateNow(source, successMessage){
+          var invoke = getTauriInvoke();
+          if (!invoke || !desktopIsTauri || !desktopStateReady || desktopStateHydrating) return Promise.resolve(null);
+          return invoke('save_live_state_to_sqlite', {
+            data: buildCurrentStateDataBlock(),
+            source: source || 'desktop_app'
+          }).then(function(result){
+            setDesktopMessageText(successMessage || ((result && result.message) ? result.message : 'Saved to SQLite.'));
+            return refreshDesktopStatus().then(function(){ return result; });
+          }).catch(function(err){
+            renderDesktopError(err);
+            throw err;
+          });
+        }
+
+        function scheduleDesktopStateSave(){
+          if (!desktopIsTauri || !desktopStateReady || desktopStateHydrating) return;
+          if (desktopSaveTimer) clearTimeout(desktopSaveTimer);
+          desktopSaveTimer = setTimeout(function(){
+            desktopSaveTimer = null;
+            desktopSaveChain = desktopSaveChain
+              .catch(function(){ return null; })
+              .then(function(){
+                return saveDesktopStateNow('desktop_app', 'Saved to SQLite.');
+              })
+              .catch(function(){ return null; });
+          }, 150);
+        }
+
+        function loadDesktopStateFromSqlite(options){
+          options = options || {};
+          var invoke = getTauriInvoke();
+          if (!invoke) { renderDesktopBrowserMode(); return Promise.resolve(false); }
+          desktopStateHydrating = true;
+          setDesktopButtonState(false);
+          return invoke('load_live_state_from_sqlite').then(function(result){
+            desktopIsTauri = true;
+            var dataBlock = (result && result.data && typeof result.data === 'object') ? result.data : {};
+            if (result && result.isEmpty && hasStateData() && !options.force) {
+              desktopStateReady = true;
+              desktopStateHydrating = false;
+              setDesktopMessageText('SQLite is empty, but browser-style data already exists on this device.');
+              if (!confirm('SQLite is empty, but this desktop app already has data saved on this device. Would you like to copy that existing data into SQLite now so the desktop app can use it every day?')) {
+                return refreshDesktopStatus().then(function(){ return false; });
+              }
+              setDesktopMessageText('Copying existing device data into SQLite…');
+              return saveDesktopStateNow('first_desktop_migration', 'Copied existing device data into SQLite. SQLite is now the live desktop data store.')
+                .then(function(){ return true; });
+            }
+
+            replaceStateFromDataBlock(dataBlock);
+            desktopStateReady = true;
+            var loadedMsg = 'Loaded live data from SQLite.';
+            if (result && result.source === 'legacy_tables') {
+              loadedMsg = 'Loaded live data from SQLite. Older imported SQLite records were picked up automatically.';
+            } else if (result && result.source === 'empty') {
+              loadedMsg = 'SQLite is ready. No live records were found yet.';
+            }
+            setDesktopMessageText(loadedMsg);
+            renderAll();
+            return refreshDesktopStatus().then(function(){ return true; });
+          }).catch(function(err){
+            renderDesktopError(err);
+            return false;
+          }).finally(function(){
+            desktopStateHydrating = false;
+            if (desktopIsTauri) setDesktopButtonState(true);
           });
         }
 
@@ -3708,7 +3870,7 @@
           reader.onerror = function(){ alert('Unable to read backup file.'); };
           reader.onload = function(){
             var text = String(reader.result || '');
-            if (!confirm('Import this browser backup into SQLite now? This will replace existing SQLite foundation data in the desktop app.')) return;
+            if (!confirm('Import this browser backup into SQLite now? This will replace the current live SQLite data in the desktop app.')) return;
             var invoke = getTauriInvoke();
             if (!invoke) { renderDesktopBrowserMode(); return; }
             setDesktopButtonState(false);
@@ -3723,10 +3885,11 @@
                   ', Maintenance: ' + (counts.maintenance || 0) +
                   ', Suppliers: ' + (counts.suppliers || 0) +
                   ', Invoices: ' + (counts.invoices || 0) + '.';
-                if (desktopMessage) desktopMessage.textContent = baseMsg + countMsg;
-                alert(baseMsg + countMsg);
+                setDesktopMessageText(baseMsg + ' Reloading the visible screens from SQLite now.' + countMsg);
                 if (desktopImportInput) desktopImportInput.value = '';
-                return refreshDesktopStatus();
+                return loadDesktopStateFromSqlite({ force: true }).then(function(){
+                  alert(baseMsg + ' The live desktop screens were reloaded from SQLite.' + countMsg);
+                });
               })
               .catch(function(err){
                 renderDesktopError(err);
@@ -3748,7 +3911,7 @@
           invoke('export_sqlite_backup')
             .then(function(result){
               var msg = (result && result.message ? result.message : 'SQLite backup created.') + ' File: ' + (result.backupPath || '');
-              if (desktopMessage) desktopMessage.textContent = msg;
+              setDesktopMessageText(msg);
               alert(msg);
               return refreshDesktopStatus();
             })
@@ -3761,13 +3924,12 @@
 
         // ---------- Export / Import / Reset ----------
         function buildBackupPayload(){
-          var data = {};
-          Object.keys(LS_KEYS).forEach(function(keyAlias){
-            var key = LS_KEYS[keyAlias];
-            try { data[key] = JSON.parse(localStorage.getItem(key) || 'null'); }
-            catch(e) { data[key] = null; }
-          });
-          return { version: 1, createdAt: new Date().toISOString(), app: 'Hiload Inyanga Plant Hire - Plant Control', data: data };
+          return {
+            version: 1,
+            createdAt: new Date().toISOString(),
+            app: 'Hiload Inyanga Plant Hire - Plant Control',
+            data: buildCurrentStateDataBlock()
+          };
         }
 
         function handleExport(){
@@ -3806,30 +3968,30 @@
               var dataBlock = (obj && obj.data && typeof obj.data === 'object') ? obj.data : obj;
 
               if (!confirm('Importing will REPLACE all current data on this device. Continue?')) return;
+              var wasHydrating = desktopStateHydrating;
+              desktopStateHydrating = true;
+              replaceStateFromDataBlock(dataBlock);
+              desktopStateHydrating = wasHydrating;
 
-              Object.keys(LS_KEYS).forEach(function(keyAlias){
-                var key = LS_KEYS[keyAlias];
-                var val = dataBlock[key];
-                if (val === undefined) localStorage.removeItem(key);
-                else localStorage.setItem(key, JSON.stringify(val));
-              });
+              var finishImport = function(message){
+                renderAll();
+                alert(message);
+                activateMain('help');
+              };
 
-              state.sites = load(LS_KEYS.sites, []);
-              state.plants = load(LS_KEYS.plants, []);
-              state.hires = load(LS_KEYS.hires, []);
-              state.maintenance = load(LS_KEYS.maintenance, []);
-              state.siteUsage = load(LS_KEYS.siteUsage, {}) || {};
-              state.meters = load(LS_KEYS.meters, {}) || {};
-              state.plantService = load(LS_KEYS.plantService, {}) || {};
-              state.rateModels = load(LS_KEYS.rateModels, {}) || {};
-              state.suppliers = load(LS_KEYS.suppliers, []) || [];
-              state.invoices = load(LS_KEYS.invoices, []) || [];
-              state.invoiceDocs = load(LS_KEYS.invoiceDocs, {}) || {};
-              ensureInvoiceStateShape();
+              if (desktopIsTauri) {
+                desktopStateReady = true;
+                saveDesktopStateNow('browser_json_import', 'Imported data and saved it to SQLite.')
+                  .then(function(){
+                    finishImport('Import complete. The live desktop SQLite data was updated too.');
+                  })
+                  .catch(function(err){
+                    finishImport('Import loaded into the screen, but SQLite save failed: ' + ((err && err.message) ? err.message : String(err)));
+                  });
+                return;
+              }
 
-              renderAll();
-              alert('Import complete.');
-              activateMain('help');
+              finishImport('Import complete.');
             } catch(e){
               console.error(e);
               alert('Import failed: invalid or corrupted file.\n' + (e && e.message ? e.message : String(e)));
@@ -3851,16 +4013,26 @@
           state.meters = {};
           state.plantService = {};
           state.rateModels = {};
+          state.alerts = {};
           state.suppliers = [];
           state.invoices = [];
           state.invoiceDocs = {};
 
-          Object.keys(LS_KEYS).forEach(function(k){
-            save(LS_KEYS[k], (k === 'alerts') ? {} : null);
-          });
+          syncStateToLocalCache();
 
           renderAll();
           activateMain('help');
+          if (desktopIsTauri) {
+            desktopStateReady = true;
+            saveDesktopStateNow('reset_all_data', 'Cleared the live desktop SQLite data.')
+              .then(function(){
+                alert('All app data has been deleted on this device and cleared from SQLite.');
+              })
+              .catch(function(err){
+                alert('Browser data was cleared, but SQLite save failed: ' + ((err && err.message) ? err.message : String(err)));
+              });
+            return;
+          }
           alert('All app data has been deleted from this browser.');
         }
 
@@ -4072,16 +4244,22 @@
             importFile._bound = true;
           }
           if (resetBtn && !resetBtn._bound) { resetBtn.addEventListener('click', resetAllData); resetBtn._bound = true; }
-          if (desktopRefreshBtn && !desktopRefreshBtn._bound) { desktopRefreshBtn.addEventListener('click', refreshDesktopStatus); desktopRefreshBtn._bound = true; }
+          if (desktopRefreshBtn && !desktopRefreshBtn._bound) { desktopRefreshBtn.addEventListener('click', function(){ loadDesktopStateFromSqlite({ force: true }); }); desktopRefreshBtn._bound = true; }
           if (desktopImportBtn && !desktopImportBtn._bound) { desktopImportBtn.addEventListener('click', importBrowserBackupIntoSqlite); desktopImportBtn._bound = true; }
           if (desktopExportDbBtn && !desktopExportDbBtn._bound) { desktopExportDbBtn.addEventListener('click', createSqliteBackupCopy); desktopExportDbBtn._bound = true; }
 
-          renderAll();
-          refreshDesktopStatus();
-
           var hash = (location.hash || '').replace('#','');
           var mainId = (['hire','plant-sites','maintenance','invoices','reports','help'].indexOf(hash) >= 0) ? hash : 'hire';
-          activateMain(mainId);
+          loadDesktopStateFromSqlite()
+            .then(function(loaded){
+              if (!loaded && !desktopIsTauri) renderAll();
+              if (!desktopIsTauri) return;
+              if (!desktopStateHydrating) renderAll();
+            })
+            .finally(function(){
+              if (!desktopIsTauri) refreshDesktopStatus();
+              activateMain(mainId);
+            });
         }
 
         init();
