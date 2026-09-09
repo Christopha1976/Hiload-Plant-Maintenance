@@ -187,6 +187,7 @@
               <span id="maint-badge" class="badge-dot hidden" aria-label="Maintenance warnings count"></span>
             </button>
           </li>
+          <li><button class="menu-btn" data-main="invoices">Invoices</button></li>
           <li><button class="menu-btn" data-main="reports">Reports</button></li>
           <li><button class="menu-btn" data-main="help">Help</button></li>
         </ul>
@@ -413,6 +414,144 @@
         </div>
       </section>
 
+      <!-- INVOICES -->
+      <section id="invoices" class="view" tabindex="-1" aria-labelledby="inv-h2">
+        <h2 id="inv-h2">Invoices</h2>
+        <p class="muted">Capture supplier invoices manually in this browser. Posting an invoice will create a linked maintenance entry.</p>
+
+        <div class="grid-2">
+          <div class="card hidden" id="invoice-new-card" data-subview="invoice-new">
+            <h3>New Invoice</h3>
+            <form id="invoice-form" class="stack" autocomplete="off">
+              <div class="field">
+                <label for="inv-file">Invoice document (PDF or image)</label>
+                <input id="inv-file" name="file" type="file" accept="application/pdf,image/*" autocomplete="off" />
+                <small class="muted">Storage in the browser is limited. Large files may not be saved locally; invoice details will still be saved.</small>
+              </div>
+              <div id="inv-file-meta" class="muted">No file selected.</div>
+              <div id="inv-file-preview" class="stack"></div>
+              <div class="inline" style="flex-wrap:wrap;gap:.75rem">
+                <div class="field" style="min-width:220px;flex:1 1 220px">
+                  <label for="inv-supplier">Supplier</label>
+                  <select id="inv-supplier" name="supplierId" required></select>
+                </div>
+                <div class="field" style="min-width:220px;flex:1 1 220px">
+                  <label for="inv-number">Invoice number</label>
+                  <input id="inv-number" name="invoiceNumber" required autocomplete="off" />
+                </div>
+              </div>
+              <div class="inline" style="flex-wrap:wrap;gap:.75rem">
+                <div class="field" style="min-width:220px;flex:1 1 220px">
+                  <label for="inv-date">Invoice date</label>
+                  <input id="inv-date" name="invoiceDate" type="date" required autocomplete="off" />
+                </div>
+                <div class="field" style="min-width:220px;flex:1 1 220px">
+                  <label for="inv-plant">Plant</label>
+                  <select id="inv-plant" name="plantId" required></select>
+                </div>
+              </div>
+              <div class="field">
+                <label for="inv-maint-type">Maintenance type</label>
+                <select id="inv-maint-type" name="maintenanceType" required>
+                  <option value="">Select type</option>
+                  <option value="tyres">Tyres</option>
+                  <option value="glass">Glass</option>
+                  <option value="body">Body</option>
+                  <option value="brakes">Brakes</option>
+                  <option value="suspension">Suspension</option>
+                  <option value="engine">Engine</option>
+                  <option value="hydraulics">Hydraulics</option>
+                  <option value="clutch">Clutch</option>
+                  <option value="service">Service</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="inv-notes">Description / notes</label>
+                <textarea id="inv-notes" name="notes" rows="3" required autocomplete="off"></textarea>
+              </div>
+              <div class="inline" style="flex-wrap:wrap;gap:.75rem">
+                <div class="field" style="min-width:180px;flex:1 1 180px">
+                  <label for="inv-net">Net amount (optional)</label>
+                  <input id="inv-net" name="netAmount" type="number" min="0" step="0.01" autocomplete="off" inputmode="decimal" />
+                </div>
+                <div class="field" style="min-width:180px;flex:1 1 180px">
+                  <label for="inv-vat">VAT amount (optional)</label>
+                  <input id="inv-vat" name="vatAmount" type="number" min="0" step="0.01" autocomplete="off" inputmode="decimal" />
+                </div>
+                <div class="field" style="min-width:180px;flex:1 1 180px">
+                  <label for="inv-total">Total amount</label>
+                  <input id="inv-total" name="totalCost" type="number" min="0" step="0.01" required autocomplete="off" inputmode="decimal" />
+                </div>
+              </div>
+              <div class="actions">
+                <button type="submit" class="btn primary">Save to Inbox</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card hidden" id="invoice-inbox-card" data-subview="invoice-inbox">
+            <h3>Invoice Inbox</h3>
+            <div class="inline" style="margin:.25rem 0 .5rem;align-items:flex-end">
+              <div class="field" style="min-width:180px;flex:1 1 180px">
+                <label for="inv-filter-status">Status</label>
+                <select id="inv-filter-status" autocomplete="off">
+                  <option value="all">All statuses</option>
+                  <option value="pending_review">Pending review</option>
+                  <option value="posted">Posted</option>
+                </select>
+              </div>
+              <div class="field" style="min-width:180px;flex:1 1 180px">
+                <label for="inv-filter-supplier">Supplier</label>
+                <select id="inv-filter-supplier" autocomplete="off">
+                  <option value="all">All suppliers</option>
+                </select>
+              </div>
+              <div class="field" style="min-width:180px;flex:1 1 180px">
+                <label for="inv-filter-plant">Plant</label>
+                <select id="inv-filter-plant" autocomplete="off">
+                  <option value="all">All plant</option>
+                </select>
+              </div>
+              <div class="actions" style="margin:0">
+                <button type="button" class="btn" id="inv-filter-clear">Clear</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="table" id="invoice-table" aria-label="Invoice inbox">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Supplier</th>
+                    <th>Invoice #</th>
+                    <th>Date</th>
+                    <th>Plant</th>
+                    <th class="num">Total</th>
+                    <th>Document</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card hidden" id="invoice-suppliers-card" data-subview="invoice-suppliers">
+            <h3>Suppliers</h3>
+            <form id="invoice-supplier-form" class="stack" autocomplete="off">
+              <div class="field">
+                <label for="invoice-supplier-name">Supplier name</label>
+                <input id="invoice-supplier-name" name="name" required autocomplete="off" />
+              </div>
+              <div class="actions">
+                <button type="submit" class="btn primary">Add Supplier</button>
+              </div>
+            </form>
+            <ul id="invoice-supplier-list" class="list"></ul>
+          </div>
+        </div>
+      </section>
+
       <!-- REPORTS -->
       <section id="reports" class="view" tabindex="-1" aria-labelledby="rep-h2">
         <h2 id="rep-h2">Reports</h2>
@@ -524,6 +663,10 @@
                 <p class="muted" style="margin:.25rem 0 0">Reports → Site • Month or Whole Contract. Weekends excluded for day rates. Enter Hours for per‑hour and KMs for per‑km lines before Print/PDF. You can save monthly results to the site’s lifetime totals.</p>
               </div>
               <div>
+                <strong>7) Invoice Inbox (manual pre-conversion)</strong>
+                <p class="muted" style="margin:.25rem 0 0">Invoices → New Invoice lets you upload a PDF/image and capture supplier, invoice number/date, plant, maintenance type and amount fields. Review in Invoice Inbox, then click Post to maintenance manually. Email import, OCR and AI extraction are not included yet and will come later in desktop conversion.</p>
+              </div>
+              <div>
                 <strong>Printing</strong>
                 <p class="muted" style="margin:.25rem 0 0">Click Print/PDF on the report. The browser print dialog will open. If quantities are missing (hours/kms), you’ll be prompted to fill them in.</p>
               </div>
@@ -536,7 +679,7 @@
 
           <div class="card">
             <h3>Export / Import</h3>
-            <p class="muted">Export saves a .json file containing all Sites, Plant, Hires, Maintenance, Month‑end readings, Service settings and Lifetime totals. Import loads a previously exported file. Importing will replace current data on this device.</p>
+            <p class="muted">Export saves a .json file containing all Sites, Plant, Hires, Maintenance, Invoices, invoice document references, Month‑end readings, Service settings and Lifetime totals. Import loads a previously exported file. Importing will replace current data on this device.</p>
             <div class="actions">
               <button id="export-data-btn" class="btn">Export data (.json)</button>
               <button id="import-data-btn" class="btn primary" aria-controls="import-file">Import data (.json)</button>
@@ -597,7 +740,9 @@
           plantService: 'hiph_plant_service',
           rateModels: 'hiph_rate_models',
           alerts: 'hiph_alerts',
-          suppliers: 'hiph_suppliers'
+          suppliers: 'hiph_suppliers',
+          invoices: 'hiph_invoices',
+          invoiceDocs: 'hiph_invoice_docs'
         };
 
         var state = {
@@ -609,7 +754,9 @@
           meters: load(LS_KEYS.meters, {}) || {},
           plantService: load(LS_KEYS.plantService, {}) || {},
           rateModels: load(LS_KEYS.rateModels, {}) || {},
-          suppliers: load(LS_KEYS.suppliers, []) || []
+          suppliers: load(LS_KEYS.suppliers, []) || [],
+          invoices: load(LS_KEYS.invoices, []) || [],
+          invoiceDocs: load(LS_KEYS.invoiceDocs, {}) || {}
         };
 
         // ---------- Constants ----------
@@ -704,7 +851,7 @@
           if (target) target.classList.remove('hidden');
         }
 
-        var MAIN_TO_SECTION = { 'hire':'hire', 'plant-sites':'plant-sites', 'maintenance':'maintenance', 'reports':'reports', 'help':'help' };
+        var MAIN_TO_SECTION = { 'hire':'hire', 'plant-sites':'plant-sites', 'maintenance':'maintenance', 'invoices':'invoices', 'reports':'reports', 'help':'help' };
 
         var MENU = {
           'hire': [
@@ -728,6 +875,11 @@
             { id: 'maint-yellow', label: 'Yellow Plant', section: 'maintenance', sub: 'maint-yellow', after: function(){ renderMonthEndSection('yellow'); renderMaintenanceLists(); emphasize('#maint-yellow-card'); } },
             { id: 'maint-truck',  label: 'Trucks',       section: 'maintenance', sub: 'maint-truck',  after: function(){ renderMonthEndSection('truck'); renderMaintenanceLists(); emphasize('#maint-truck-card'); } },
             { id: 'maint-bakkie', label: 'Bakkies',      section: 'maintenance', sub: 'maint-bakkie', after: function(){ renderMonthEndSection('bakkie'); renderMaintenanceLists(); emphasize('#maint-bakkie-card'); } }
+          ],
+          'invoices': [
+            { id: 'invoice-new', label: 'New Invoice', section: 'invoices', sub: 'invoice-new', after: function(){ renderInvoiceFormOptions(); emphasize('#invoice-new-card'); } },
+            { id: 'invoice-inbox', label: 'Invoice Inbox', section: 'invoices', sub: 'invoice-inbox', after: function(){ renderInvoiceFilters(); renderInvoiceInbox(); emphasize('#invoice-inbox-card'); } },
+            { id: 'invoice-suppliers', label: 'Suppliers', section: 'invoices', sub: 'invoice-suppliers', after: function(){ renderInvoiceSuppliers(); emphasize('#invoice-suppliers-card'); } }
           ],
           'reports': [
             { id: 'report-month',   label: 'Site • Month',   section: 'reports', sub: 'report-month', after: function(){ renderReportSiteSelects(); emphasize('#report-month-card'); } },
@@ -777,6 +929,7 @@
               renderMaintenanceLists();
               renderMonthEndSection('yellow'); renderMonthEndSection('truck'); renderMonthEndSection('bakkie');
             }
+            if (sectionId === 'invoices') { renderInvoiceFormOptions(); renderInvoiceFilters(); renderInvoiceInbox(); renderInvoiceSuppliers(); }
             if (sectionId === 'reports') { renderReportSiteSelects(); }
           }
           buildSubmenu(mainId);
@@ -1658,6 +1811,702 @@
           state.suppliers.push(sup);
           save(LS_KEYS.suppliers, state.suppliers);
           return sup;
+        }
+
+        // ---------- Invoice inbox ----------
+        var invoiceForm = byId('invoice-form');
+        var invoiceFileInput = byId('inv-file');
+        var invoiceFileMeta = byId('inv-file-meta');
+        var invoiceFilePreview = byId('inv-file-preview');
+        var invoiceTableBody = $('#invoice-table tbody');
+        var invoiceFilterStatusSel = byId('inv-filter-status');
+        var invoiceFilterSupplierSel = byId('inv-filter-supplier');
+        var invoiceFilterPlantSel = byId('inv-filter-plant');
+        var invoiceFilterClearBtn = byId('inv-filter-clear');
+        var invoiceSupplierForm = byId('invoice-supplier-form');
+        var invoiceSupplierList = byId('invoice-supplier-list');
+        var invoiceFilter = { status: 'all', supplierId: 'all', plantId: 'all' };
+
+        function ensureInvoiceStateShape(){
+          if (!Array.isArray(state.invoices)) state.invoices = [];
+          if (!state.invoiceDocs || typeof state.invoiceDocs !== 'object') state.invoiceDocs = {};
+          var changed = false;
+          state.invoices = state.invoices.map(function(inv){
+            var next = Object.assign({}, inv);
+            if (!next.id) { next.id = uid('inv_'); changed = true; }
+            if (!next.receivedAt && next.createdAt) { next.receivedAt = next.createdAt; changed = true; }
+            if (!next.createdAt && next.receivedAt) { next.createdAt = next.receivedAt; changed = true; }
+            if (!next.createdAt && !next.receivedAt) { next.createdAt = new Date().toISOString(); next.receivedAt = next.createdAt; changed = true; }
+            if (!next.status) { next.status = 'pending_review'; changed = true; }
+            if (next.status !== 'pending_review' && next.status !== 'posted') { next.status = 'pending_review'; changed = true; }
+            if (typeof next.totalCost !== 'number') {
+              var totalNum = parseFloat(next.totalCost);
+              next.totalCost = isFinite(totalNum) && totalNum >= 0 ? totalNum : 0;
+              changed = true;
+            }
+            if (next.netAmount !== null && next.netAmount !== '' && next.netAmount !== undefined && typeof next.netAmount !== 'number') {
+              var netNum = parseFloat(next.netAmount);
+              next.netAmount = isFinite(netNum) && netNum >= 0 ? netNum : null;
+              changed = true;
+            }
+            if (next.vatAmount !== null && next.vatAmount !== '' && next.vatAmount !== undefined && typeof next.vatAmount !== 'number') {
+              var vatNum = parseFloat(next.vatAmount);
+              next.vatAmount = isFinite(vatNum) && vatNum >= 0 ? vatNum : null;
+              changed = true;
+            }
+            if (!Array.isArray(next.duplicateOfIds)) next.duplicateOfIds = [];
+            if (typeof next.isDuplicateNumber !== 'boolean') next.isDuplicateNumber = next.duplicateOfIds.length > 0;
+            if (typeof next.hasDocument !== 'boolean') next.hasDocument = !!(state.invoiceDocs[next.id] && state.invoiceDocs[next.id].dataUrl);
+            if (!next.docStorageStatus) next.docStorageStatus = next.hasDocument ? 'stored' : 'not_stored';
+            return next;
+          });
+          if (changed) save(LS_KEYS.invoices, state.invoices);
+        }
+
+        function normalizeInvoiceNumber(v){ return String(v || '').trim().toLowerCase(); }
+        function parseOptionalAmount(v){
+          var raw = String(v || '').trim();
+          if (!raw) return null;
+          var n = parseFloat(raw);
+          return (isFinite(n) && n >= 0) ? n : NaN;
+        }
+        function parseRequiredAmount(v){
+          var n = parseFloat(String(v || '').trim());
+          return (isFinite(n) && n >= 0) ? n : NaN;
+        }
+        function invoiceHasStoredDocument(inv){
+          var doc = state.invoiceDocs[inv.id];
+          return !!(doc && doc.dataUrl && String(doc.dataUrl).indexOf('data:') === 0);
+        }
+        function invoiceDocumentStatusText(inv){
+          if (invoiceHasStoredDocument(inv)) return 'Stored';
+          if (inv.filename) return 'Metadata only';
+          return 'No file';
+        }
+        function plantNameById(id){
+          var p = state.plants.find(function(x){ return x.id === id; });
+          return p ? displayNameWithReg(p) : '';
+        }
+        function findDuplicateInvoices(supplierId, invoiceNumber, excludeId){
+          var key = normalizeInvoiceNumber(invoiceNumber);
+          if (!supplierId || !key) return [];
+          return state.invoices.filter(function(inv){
+            return inv.id !== excludeId &&
+              String(inv.supplierId || '') === String(supplierId) &&
+              normalizeInvoiceNumber(inv.invoiceNumber) === key;
+          });
+        }
+        function persistInvoiceDocs(){
+          try {
+            localStorage.setItem(LS_KEYS.invoiceDocs, JSON.stringify(state.invoiceDocs));
+            return true;
+          } catch(e) {
+            return false;
+          }
+        }
+        function refreshInvoiceUi(){
+          renderInvoiceFormOptions();
+          renderInvoiceFilters();
+          renderInvoiceInbox();
+          renderInvoiceSuppliers();
+          renderMaintenanceReportFilters();
+        }
+
+        function renderInvoiceFormOptions(){
+          var supplierSel = byId('inv-supplier');
+          var plantSel = byId('inv-plant');
+          if (supplierSel) {
+            var currentSupplier = supplierSel.value;
+            renderSupplierOptions(supplierSel, true);
+            if (currentSupplier && (currentSupplier === '__new__' || state.suppliers.some(function(s){ return s.id === currentSupplier; }))) {
+              supplierSel.value = currentSupplier;
+            }
+            if (!supplierSel._hasAddHandler) {
+              supplierSel.addEventListener('change', function(){
+                if (supplierSel.value === '__new__') {
+                  var newName = prompt('New supplier name:');
+                  if (newName && newName.trim()) {
+                    var sup = upsertSupplierByName(newName);
+                    renderSupplierOptions(supplierSel, true);
+                    if (sup) supplierSel.value = sup.id;
+                    refreshInvoiceUi();
+                  } else supplierSel.value = '';
+                }
+              });
+              supplierSel._hasAddHandler = true;
+            }
+          }
+          if (plantSel) {
+            var currentPlant = plantSel.value;
+            if (!state.plants.length) plantSel.innerHTML = '<option value="">No plant yet</option>';
+            else plantSel.innerHTML = '<option value="">Select plant</option>' + state.plants
+              .slice()
+              .sort(function(a,b){ return displayNameWithReg(a).localeCompare(displayNameWithReg(b)); })
+              .map(function(p){ return '<option value="'+escapeAttr(p.id)+'">'+escapeHtml(displayNameWithReg(p))+'</option>'; })
+              .join('');
+            if (currentPlant && state.plants.some(function(p){ return p.id === currentPlant; })) plantSel.value = currentPlant;
+          }
+          var invoiceDateInput = byId('inv-date');
+          if (invoiceDateInput && !invoiceDateInput.value) invoiceDateInput.value = new Date().toISOString().slice(0,10);
+        }
+
+        function resetInvoiceFileUi(){
+          if (invoiceFileMeta) invoiceFileMeta.textContent = 'No file selected.';
+          if (invoiceFilePreview) invoiceFilePreview.innerHTML = '';
+        }
+
+        function renderInvoiceFilePreview(file, dataUrl){
+          if (invoiceFileMeta) invoiceFileMeta.textContent = file ? ('Selected: ' + file.name + ' (' + Math.round((file.size || 0) / 1024) + ' KB)') : 'No file selected.';
+          if (!invoiceFilePreview) return;
+          invoiceFilePreview.innerHTML = '';
+          if (!file || !dataUrl) return;
+          var mime = String(file.type || '');
+          if (mime.indexOf('image/') === 0) {
+            invoiceFilePreview.innerHTML = '<img src="'+escapeAttr(dataUrl)+'" alt="Selected invoice preview" style="max-width:100%;max-height:260px;border:1px solid var(--border);border-radius:10px;padding:.25rem;background:#fff" />';
+          } else if (mime === 'application/pdf') {
+            invoiceFilePreview.innerHTML = '<embed src="'+escapeAttr(dataUrl)+'" type="application/pdf" style="width:100%;height:320px;border:1px solid var(--border);border-radius:10px" />';
+          } else {
+            invoiceFilePreview.innerHTML = '<div class="muted">Preview is not available for this file type in the current browser.</div>';
+          }
+        }
+
+        function createInvoiceRecord(values){
+          var duplicateList = findDuplicateInvoices(values.supplierId, values.invoiceNumber, values.id || '');
+          return {
+            id: values.id || uid('inv_'),
+            supplierId: values.supplierId,
+            invoiceNumber: values.invoiceNumber,
+            invoiceDate: values.invoiceDate,
+            receivedAt: values.receivedAt || new Date().toISOString(),
+            createdAt: values.createdAt || new Date().toISOString(),
+            plantId: values.plantId,
+            maintenanceType: values.maintenanceType,
+            notes: values.notes,
+            netAmount: values.netAmount,
+            vatAmount: values.vatAmount,
+            totalCost: values.totalCost,
+            filename: values.filename || '',
+            fileMimeType: values.fileMimeType || '',
+            hasDocument: !!values.hasDocument,
+            docStorageStatus: values.docStorageStatus || (values.hasDocument ? 'stored' : 'not_stored'),
+            status: values.status || 'pending_review',
+            duplicateOfIds: duplicateList.map(function(x){ return x.id; }),
+            isDuplicateNumber: duplicateList.length > 0
+          };
+        }
+
+        function saveInvoiceRecordWithDocument(record, documentPayload){
+          var storageWarning = '';
+          if (documentPayload && documentPayload.dataUrl) {
+            state.invoiceDocs[record.id] = {
+              dataUrl: documentPayload.dataUrl,
+              fileName: documentPayload.fileName || record.filename || '',
+              mimeType: documentPayload.mimeType || record.fileMimeType || '',
+              size: documentPayload.size || 0,
+              storedAt: new Date().toISOString()
+            };
+            if (persistInvoiceDocs()) {
+              record.hasDocument = true;
+              record.docStorageStatus = 'stored';
+            } else {
+              delete state.invoiceDocs[record.id];
+              record.hasDocument = false;
+              record.docStorageStatus = 'not_stored';
+              storageWarning = 'Document could not be stored locally (browser storage limit). Invoice details were saved.';
+            }
+          } else if (!record.hasDocument) {
+            record.docStorageStatus = record.filename ? 'not_stored' : 'no_file';
+          }
+
+          var idx = state.invoices.findIndex(function(x){ return x.id === record.id; });
+          if (idx >= 0) state.invoices[idx] = record;
+          else state.invoices.push(record);
+          save(LS_KEYS.invoices, state.invoices);
+          refreshInvoiceUi();
+          return storageWarning;
+        }
+
+        function renderInvoiceFilters(){
+          if (invoiceFilterSupplierSel) {
+            var currentSupplier = invoiceFilter.supplierId;
+            var supplierOpts = '<option value="all">All suppliers</option>' + state.suppliers
+              .slice()
+              .sort(function(a,b){ return a.name.localeCompare(b.name); })
+              .map(function(s){ return '<option value="'+escapeAttr(s.id)+'">'+escapeHtml(s.name)+'</option>'; })
+              .join('');
+            invoiceFilterSupplierSel.innerHTML = supplierOpts;
+            invoiceFilterSupplierSel.value = (currentSupplier === 'all' || state.suppliers.some(function(s){ return s.id === currentSupplier; })) ? currentSupplier : 'all';
+            invoiceFilter.supplierId = invoiceFilterSupplierSel.value;
+          }
+          if (invoiceFilterPlantSel) {
+            var currentPlant = invoiceFilter.plantId;
+            var plantOpts = '<option value="all">All plant</option>' + state.plants
+              .slice()
+              .sort(function(a,b){ return displayNameWithReg(a).localeCompare(displayNameWithReg(b)); })
+              .map(function(p){ return '<option value="'+escapeAttr(p.id)+'">'+escapeHtml(displayNameWithReg(p))+'</option>'; })
+              .join('');
+            invoiceFilterPlantSel.innerHTML = plantOpts;
+            invoiceFilterPlantSel.value = (currentPlant === 'all' || state.plants.some(function(p){ return p.id === currentPlant; })) ? currentPlant : 'all';
+            invoiceFilter.plantId = invoiceFilterPlantSel.value;
+          }
+          if (invoiceFilterStatusSel) invoiceFilterStatusSel.value = invoiceFilter.status || 'all';
+        }
+
+        function renderInvoiceInbox(){
+          if (!invoiceTableBody) return;
+          var list = state.invoices.slice().sort(function(a,b){
+            var bk = String(b.receivedAt || b.createdAt || b.invoiceDate || '');
+            var ak = String(a.receivedAt || a.createdAt || a.invoiceDate || '');
+            return bk.localeCompare(ak);
+          });
+          if (invoiceFilter.status !== 'all') list = list.filter(function(inv){ return inv.status === invoiceFilter.status; });
+          if (invoiceFilter.supplierId !== 'all') list = list.filter(function(inv){ return inv.supplierId === invoiceFilter.supplierId; });
+          if (invoiceFilter.plantId !== 'all') list = list.filter(function(inv){ return inv.plantId === invoiceFilter.plantId; });
+
+          invoiceTableBody.innerHTML = '';
+          if (!list.length) {
+            var trEmpty = document.createElement('tr');
+            trEmpty.innerHTML = '<td colspan="8" class="muted">No invoices match current filters.</td>';
+            invoiceTableBody.appendChild(trEmpty);
+            return;
+          }
+
+          list.forEach(function(inv){
+            var tr = document.createElement('tr');
+            var supName = supplierNameById(inv.supplierId) || '—';
+            var plantName = plantNameById(inv.plantId) || 'Unknown plant';
+            var statusTxt = inv.status === 'posted' ? 'Posted' : 'Pending review';
+            var docTxt = invoiceDocumentStatusText(inv);
+            var dupTxt = inv.isDuplicateNumber ? ' <span class="badge">Possible duplicate</span>' : '';
+            tr.innerHTML =
+              '<td>'+escapeHtml(statusTxt)+'</td>' +
+              '<td>'+escapeHtml(supName)+'</td>' +
+              '<td>'+escapeHtml(inv.invoiceNumber || '—') + dupTxt + '</td>' +
+              '<td>'+escapeHtml(inv.invoiceDate || '—')+'</td>' +
+              '<td>'+escapeHtml(plantName)+'</td>' +
+              '<td class="num">'+toMoney(inv.totalCost)+'</td>' +
+              '<td>'+escapeHtml(docTxt)+'</td>' +
+              '<td>' +
+                '<button type="button" class="btn btn-sm inv-review" data-id="'+escapeAttr(inv.id)+'">Review</button> ' +
+                '<button type="button" class="btn btn-sm inv-post" data-id="'+escapeAttr(inv.id)+'"'+(inv.status === 'posted' ? ' disabled' : '')+'>Post to maintenance</button> ' +
+                '<button type="button" class="btn btn-sm danger inv-del" data-id="'+escapeAttr(inv.id)+'">Delete</button>' +
+              '</td>';
+            invoiceTableBody.appendChild(tr);
+          });
+        }
+
+        function postInvoiceToMaintenance(invoiceId){
+          var idx = state.invoices.findIndex(function(inv){ return inv.id === invoiceId; });
+          if (idx < 0) return;
+          var inv = state.invoices[idx];
+          if (inv.status === 'posted') { alert('This invoice is already posted.'); return; }
+          if (!inv.plantId || !state.plants.some(function(p){ return p.id === inv.plantId; })) { alert('Select a valid plant before posting this invoice.'); return; }
+          if (!isFinite(Number(inv.totalCost)) || Number(inv.totalCost) < 0) { alert('Invoice total amount is invalid.'); return; }
+          if (!confirm('Post this invoice to maintenance history now?')) return;
+
+          var existing = state.maintenance.find(function(m){ return m.invoiceId === inv.id; });
+          if (existing) {
+            inv.status = 'posted';
+            state.invoices[idx] = inv;
+            save(LS_KEYS.invoices, state.invoices);
+            refreshInvoiceUi();
+            return;
+          }
+
+          state.maintenance.push({
+            id: uid('m_'),
+            plantId: inv.plantId,
+            date: inv.invoiceDate || new Date().toISOString().slice(0,10),
+            notes: inv.notes || '',
+            cost: Number(inv.totalCost),
+            type: inv.maintenanceType || '',
+            supplierId: inv.supplierId || '',
+            meterAtService: 0,
+            invoiceId: inv.id
+          });
+          save(LS_KEYS.maintenance, state.maintenance);
+
+          inv.status = 'posted';
+          inv.postedAt = new Date().toISOString();
+          state.invoices[idx] = inv;
+          save(LS_KEYS.invoices, state.invoices);
+          renderMaintenanceLists();
+          renderMaintenanceReportFilters();
+          renderWarningsPanel();
+          updateMaintBadge();
+          refreshInvoiceUi();
+        }
+
+        function deleteInvoiceById(invoiceId){
+          var idx = state.invoices.findIndex(function(inv){ return inv.id === invoiceId; });
+          if (idx < 0) return;
+          var inv = state.invoices[idx];
+          if (inv.status === 'posted') {
+            if (!confirm('This posted invoice has a linked maintenance cost entry. Deleting it will also remove that maintenance entry. Continue?')) return;
+            state.maintenance = state.maintenance.filter(function(m){ return m.invoiceId !== inv.id; });
+            save(LS_KEYS.maintenance, state.maintenance);
+          } else {
+            if (!confirm('Delete this pending invoice record?')) return;
+          }
+          state.invoices.splice(idx, 1);
+          delete state.invoiceDocs[invoiceId];
+          save(LS_KEYS.invoices, state.invoices);
+          persistInvoiceDocs();
+          renderMaintenanceLists();
+          renderMaintenanceReportFilters();
+          refreshInvoiceUi();
+        }
+
+        function openInvoiceReviewModal(invoiceId){
+          var idx = state.invoices.findIndex(function(inv){ return inv.id === invoiceId; });
+          if (idx < 0) return;
+          var inv = state.invoices[idx];
+          var posted = inv.status === 'posted';
+          var doc = state.invoiceDocs[inv.id];
+
+          modalTitle.textContent = 'Invoice review';
+          modalBody.innerHTML =
+            '<div class="muted" style="margin-bottom:.5rem">Status: <strong>'+(posted ? 'Posted' : 'Pending review')+'</strong>'+(inv.isDuplicateNumber ? ' • <span class="badge">Possible duplicate invoice number</span>' : '')+'</div>' +
+            '<div class="inline" style="flex-wrap:wrap;gap:.75rem">' +
+              '<div class="field" style="min-width:220px;flex:1 1 220px"><label for="m-inv-supplier">Supplier</label><select id="m-inv-supplier"'+(posted ? ' disabled' : '')+'></select></div>' +
+              '<div class="field" style="min-width:220px;flex:1 1 220px"><label for="m-inv-number">Invoice number</label><input id="m-inv-number" value="'+escapeAttr(inv.invoiceNumber || '')+'"'+(posted ? ' disabled' : '')+' autocomplete="off" /></div>' +
+            '</div>' +
+            '<div class="inline" style="flex-wrap:wrap;gap:.75rem">' +
+              '<div class="field" style="min-width:220px;flex:1 1 220px"><label for="m-inv-date">Invoice date</label><input id="m-inv-date" type="date" value="'+escapeAttr(inv.invoiceDate || '')+'"'+(posted ? ' disabled' : '')+' autocomplete="off" /></div>' +
+              '<div class="field" style="min-width:220px;flex:1 1 220px"><label for="m-inv-plant">Plant</label><select id="m-inv-plant"'+(posted ? ' disabled' : '')+'></select></div>' +
+            '</div>' +
+            '<div class="field"><label for="m-inv-type">Maintenance type</label><select id="m-inv-type"'+(posted ? ' disabled' : '')+'><option value="">Select type</option><option value="tyres">Tyres</option><option value="glass">Glass</option><option value="body">Body</option><option value="brakes">Brakes</option><option value="suspension">Suspension</option><option value="engine">Engine</option><option value="hydraulics">Hydraulics</option><option value="clutch">Clutch</option><option value="service">Service</option><option value="other">Other</option></select></div>' +
+            '<div class="field"><label for="m-inv-notes">Description / notes</label><textarea id="m-inv-notes" rows="3" autocomplete="off">'+escapeText(inv.notes || '')+'</textarea></div>' +
+            '<div class="inline" style="flex-wrap:wrap;gap:.75rem">' +
+              '<div class="field" style="min-width:180px;flex:1 1 180px"><label for="m-inv-net">Net amount</label><input id="m-inv-net" type="number" step="0.01" min="0" value="'+escapeAttr(inv.netAmount === null || inv.netAmount === undefined ? '' : inv.netAmount)+'"'+(posted ? ' disabled' : '')+' autocomplete="off" inputmode="decimal" /></div>' +
+              '<div class="field" style="min-width:180px;flex:1 1 180px"><label for="m-inv-vat">VAT amount</label><input id="m-inv-vat" type="number" step="0.01" min="0" value="'+escapeAttr(inv.vatAmount === null || inv.vatAmount === undefined ? '' : inv.vatAmount)+'"'+(posted ? ' disabled' : '')+' autocomplete="off" inputmode="decimal" /></div>' +
+              '<div class="field" style="min-width:180px;flex:1 1 180px"><label for="m-inv-total">Total amount</label><input id="m-inv-total" type="number" step="0.01" min="0" value="'+escapeAttr(inv.totalCost)+'"'+(posted ? ' disabled' : '')+' autocomplete="off" inputmode="decimal" /></div>' +
+            '</div>' +
+            (posted
+              ? '<p class="muted">Financial and assignment fields are locked because this invoice is posted. You may edit notes only, or delete the invoice.</p>'
+              : '<div class="field"><label for="m-inv-file">Replace document (optional)</label><input id="m-inv-file" type="file" accept="application/pdf,image/*" autocomplete="off" /></div>'
+            ) +
+            '<div id="m-inv-doc-actions" class="actions" style="margin-top:.25rem"></div>';
+
+          var reviewSupplier = byId('m-inv-supplier');
+          var reviewPlant = byId('m-inv-plant');
+          var reviewType = byId('m-inv-type');
+          var docActions = byId('m-inv-doc-actions');
+          renderSupplierOptions(reviewSupplier, !posted);
+          if (reviewSupplier) reviewSupplier.value = inv.supplierId || '';
+          if (reviewPlant) {
+            reviewPlant.innerHTML = '<option value="">Select plant</option>' + state.plants.map(function(p){
+              return '<option value="'+escapeAttr(p.id)+'">'+escapeHtml(displayNameWithReg(p))+'</option>';
+            }).join('');
+            reviewPlant.value = inv.plantId || '';
+          }
+          if (reviewType) reviewType.value = inv.maintenanceType || '';
+          if (reviewSupplier && !reviewSupplier._hasAddHandler) {
+            reviewSupplier.addEventListener('change', function(){
+              if (reviewSupplier.value === '__new__') {
+                var nm = prompt('New supplier name:');
+                if (nm && nm.trim()) {
+                  var s = upsertSupplierByName(nm);
+                  renderSupplierOptions(reviewSupplier, true);
+                  if (s) reviewSupplier.value = s.id;
+                  refreshInvoiceUi();
+                } else reviewSupplier.value = inv.supplierId || '';
+              }
+            });
+            reviewSupplier._hasAddHandler = true;
+          }
+
+          if (docActions) {
+            if (doc && doc.dataUrl) {
+              docActions.innerHTML =
+                '<a class="btn" href="'+escapeAttr(doc.dataUrl)+'" target="_blank" rel="noopener">Open document</a>' +
+                '<a class="btn" href="'+escapeAttr(doc.dataUrl)+'" download="'+escapeAttr(doc.fileName || inv.filename || 'invoice-document')+'">Download</a>' +
+                '<span class="muted">Stored locally</span>';
+            } else {
+              docActions.innerHTML = '<span class="muted">No locally stored document is available for preview/download.</span>';
+            }
+          }
+
+          modalSubmit.textContent = posted ? 'Save notes' : 'Save changes';
+          modal.showModal();
+          modalSubmit.onclick = function(){
+            var supplierId = reviewSupplier ? String(reviewSupplier.value || '').trim() : '';
+            var invoiceNumber = String((byId('m-inv-number').value || '').trim());
+            var invoiceDate = String((byId('m-inv-date').value || '').trim());
+            var plantId = reviewPlant ? String(reviewPlant.value || '').trim() : '';
+            var maintenanceType = reviewType ? String(reviewType.value || '').trim() : '';
+            var notes = String((byId('m-inv-notes').value || '').trim());
+            var netAmount = parseOptionalAmount(byId('m-inv-net').value);
+            var vatAmount = parseOptionalAmount(byId('m-inv-vat').value);
+            var totalCost = parseRequiredAmount(byId('m-inv-total').value);
+
+            if (!notes) { alert('Description / notes are required.'); return; }
+            if (posted) {
+              inv.notes = notes;
+              state.invoices[idx] = inv;
+              save(LS_KEYS.invoices, state.invoices);
+              refreshInvoiceUi();
+              modal.close('submit');
+              return;
+            }
+            if (!supplierId || supplierId === '__new__') { alert('Supplier is required.'); return; }
+            if (!invoiceNumber) { alert('Invoice number is required.'); return; }
+            if (!invoiceDate) { alert('Invoice date is required.'); return; }
+            if (!plantId) { alert('Plant is required.'); return; }
+            if (!maintenanceType) { alert('Maintenance type is required.'); return; }
+            if (netAmount !== null && !isFinite(netAmount)) { alert('Net amount must be a non-negative number.'); return; }
+            if (vatAmount !== null && !isFinite(vatAmount)) { alert('VAT amount must be a non-negative number.'); return; }
+            if (!isFinite(totalCost)) { alert('Total amount must be a non-negative number.'); return; }
+
+            var duplicates = findDuplicateInvoices(supplierId, invoiceNumber, inv.id);
+            if (duplicates.length && !confirm('Another invoice with this supplier and invoice number already exists. Save this as a duplicate anyway?')) return;
+
+            function applyInvoiceUpdate(docPayload, docStorageStatus){
+              inv.supplierId = supplierId;
+              inv.invoiceNumber = invoiceNumber;
+              inv.invoiceDate = invoiceDate;
+              inv.plantId = plantId;
+              inv.maintenanceType = maintenanceType;
+              inv.notes = notes;
+              inv.netAmount = netAmount;
+              inv.vatAmount = vatAmount;
+              inv.totalCost = totalCost;
+              inv.filename = docPayload && docPayload.fileName ? docPayload.fileName : (inv.filename || '');
+              inv.fileMimeType = docPayload && docPayload.mimeType ? docPayload.mimeType : (inv.fileMimeType || '');
+              inv.updatedAt = new Date().toISOString();
+              inv.duplicateOfIds = duplicates.map(function(x){ return x.id; });
+              inv.isDuplicateNumber = duplicates.length > 0;
+              if (docStorageStatus === 'stored') {
+                inv.hasDocument = true;
+                inv.docStorageStatus = 'stored';
+              } else if (docStorageStatus === 'not_stored') {
+                inv.hasDocument = false;
+                inv.docStorageStatus = 'not_stored';
+              }
+              state.invoices[idx] = inv;
+              save(LS_KEYS.invoices, state.invoices);
+              refreshInvoiceUi();
+              modal.close('submit');
+            }
+
+            var replacementInput = byId('m-inv-file');
+            var replacement = replacementInput && replacementInput.files && replacementInput.files[0] ? replacementInput.files[0] : null;
+            if (!replacement) {
+              applyInvoiceUpdate(null, '');
+              return;
+            }
+            var mime = String(replacement.type || '');
+            if (!(mime === 'application/pdf' || mime.indexOf('image/') === 0)) { alert('Only PDF and image files are supported.'); return; }
+            var reader = new FileReader();
+            reader.onerror = function(){
+              applyInvoiceUpdate({ fileName: replacement.name, mimeType: mime }, 'not_stored');
+              alert('Could not read replacement document. Invoice details were still saved.');
+            };
+            reader.onload = function(){
+              state.invoiceDocs[inv.id] = {
+                dataUrl: String(reader.result || ''),
+                fileName: replacement.name || '',
+                mimeType: mime,
+                size: replacement.size || 0,
+                storedAt: new Date().toISOString()
+              };
+              if (persistInvoiceDocs()) applyInvoiceUpdate({ fileName: replacement.name, mimeType: mime }, 'stored');
+              else {
+                delete state.invoiceDocs[inv.id];
+                applyInvoiceUpdate({ fileName: replacement.name, mimeType: mime }, 'not_stored');
+                alert('Replacement file could not be stored locally due to browser storage limits.');
+              }
+            };
+            reader.readAsDataURL(replacement);
+          };
+        }
+
+        function renderInvoiceSuppliers(){
+          if (!invoiceSupplierList) return;
+          invoiceSupplierList.innerHTML = '';
+          if (!state.suppliers.length) {
+            invoiceSupplierList.innerHTML = '<li class="muted">No suppliers yet.</li>';
+            return;
+          }
+          state.suppliers
+            .slice()
+            .sort(function(a,b){ return a.name.localeCompare(b.name); })
+            .forEach(function(s){
+              var li = document.createElement('li');
+              li.innerHTML = '<div><strong>'+escapeHtml(s.name)+'</strong></div>';
+              var actions = document.createElement('div');
+              var rm = document.createElement('button');
+              rm.type = 'button';
+              rm.className = 'btn danger';
+              rm.textContent = 'Remove';
+              rm.addEventListener('click', function(){
+                var invUse = state.invoices.filter(function(inv){ return inv.supplierId === s.id; }).length;
+                var maintUse = state.maintenance.filter(function(m){ return m.supplierId === s.id; }).length;
+                if (invUse || maintUse) {
+                  alert('Cannot remove supplier "' + s.name + '" because it is used by ' + invUse + ' invoice(s) and ' + maintUse + ' maintenance record(s).');
+                  return;
+                }
+                if (!confirm('Remove supplier "' + s.name + '"?')) return;
+                state.suppliers = state.suppliers.filter(function(x){ return x.id !== s.id; });
+                save(LS_KEYS.suppliers, state.suppliers);
+                refreshInvoiceUi();
+              });
+              actions.appendChild(rm);
+              li.appendChild(actions);
+              invoiceSupplierList.appendChild(li);
+            });
+        }
+
+        if (invoiceFileInput && !invoiceFileInput._bound) {
+          invoiceFileInput.addEventListener('change', function(ev){
+            var file = ev.target && ev.target.files && ev.target.files[0];
+            if (!file) { resetInvoiceFileUi(); return; }
+            var mime = String(file.type || '');
+            if (!(mime === 'application/pdf' || mime.indexOf('image/') === 0)) {
+              alert('Only PDF and image files are supported.');
+              invoiceFileInput.value = '';
+              resetInvoiceFileUi();
+              return;
+            }
+            var reader = new FileReader();
+            reader.onerror = function(){ renderInvoiceFilePreview(file, ''); };
+            reader.onload = function(){ renderInvoiceFilePreview(file, String(reader.result || '')); };
+            reader.readAsDataURL(file);
+          });
+          invoiceFileInput._bound = true;
+        }
+
+        if (invoiceForm && !invoiceForm._bound) {
+          invoiceForm.addEventListener('submit', function(e){
+            e.preventDefault();
+            var supplierSel = byId('inv-supplier');
+            var supplierId = supplierSel ? String(supplierSel.value || '').trim() : '';
+            if (supplierId === '__new__') {
+              var createdName = prompt('New supplier name:');
+              if (createdName && createdName.trim()) {
+                var newSup = upsertSupplierByName(createdName);
+                renderInvoiceFormOptions();
+                supplierId = newSup ? newSup.id : '';
+                if (supplierSel) supplierSel.value = supplierId;
+                refreshInvoiceUi();
+              } else supplierId = '';
+            }
+            var invoiceNumber = String((byId('inv-number').value || '').trim());
+            var invoiceDate = String((byId('inv-date').value || '').trim());
+            var plantId = String((byId('inv-plant').value || '').trim());
+            var maintenanceType = String((byId('inv-maint-type').value || '').trim());
+            var notes = String((byId('inv-notes').value || '').trim());
+            var netAmount = parseOptionalAmount(byId('inv-net').value);
+            var vatAmount = parseOptionalAmount(byId('inv-vat').value);
+            var totalCost = parseRequiredAmount(byId('inv-total').value);
+            var file = invoiceFileInput && invoiceFileInput.files && invoiceFileInput.files[0] ? invoiceFileInput.files[0] : null;
+
+            if (!supplierId) { alert('Supplier is required.'); return; }
+            if (!invoiceNumber) { alert('Invoice number is required.'); return; }
+            if (!invoiceDate) { alert('Invoice date is required.'); return; }
+            if (!plantId) { alert('Plant is required.'); return; }
+            if (!maintenanceType) { alert('Maintenance type is required.'); return; }
+            if (!notes) { alert('Description / notes are required.'); return; }
+            if (netAmount !== null && !isFinite(netAmount)) { alert('Net amount must be a non-negative number.'); return; }
+            if (vatAmount !== null && !isFinite(vatAmount)) { alert('VAT amount must be a non-negative number.'); return; }
+            if (!isFinite(totalCost)) { alert('Total amount must be a non-negative number.'); return; }
+
+            var duplicates = findDuplicateInvoices(supplierId, invoiceNumber, '');
+            if (duplicates.length && !confirm('Another invoice with this supplier and invoice number already exists. Save this duplicate anyway?')) return;
+
+            function finalize(documentPayload){
+              var record = createInvoiceRecord({
+                supplierId: supplierId,
+                invoiceNumber: invoiceNumber,
+                invoiceDate: invoiceDate,
+                plantId: plantId,
+                maintenanceType: maintenanceType,
+                notes: notes,
+                netAmount: netAmount,
+                vatAmount: vatAmount,
+                totalCost: totalCost,
+                filename: documentPayload ? documentPayload.fileName : (file ? file.name : ''),
+                fileMimeType: documentPayload ? documentPayload.mimeType : (file ? String(file.type || '') : ''),
+                status: 'pending_review',
+                hasDocument: !!(documentPayload && documentPayload.dataUrl)
+              });
+              record.duplicateOfIds = duplicates.map(function(x){ return x.id; });
+              record.isDuplicateNumber = duplicates.length > 0;
+              var warning = saveInvoiceRecordWithDocument(record, documentPayload || null);
+              invoiceForm.reset();
+              resetInvoiceFileUi();
+              if (warning) alert(warning);
+            }
+
+            if (!file) { finalize(null); return; }
+            var mime = String(file.type || '');
+            if (!(mime === 'application/pdf' || mime.indexOf('image/') === 0)) { alert('Only PDF and image files are supported.'); return; }
+            var reader = new FileReader();
+            reader.onerror = function(){
+              finalize({ fileName: file.name, mimeType: mime });
+              alert('Could not read file preview/document. Invoice details were saved without local document storage.');
+            };
+            reader.onload = function(){
+              finalize({
+                dataUrl: String(reader.result || ''),
+                fileName: file.name || '',
+                mimeType: mime,
+                size: file.size || 0
+              });
+            };
+            reader.readAsDataURL(file);
+          });
+          invoiceForm._bound = true;
+        }
+
+        if (invoiceTableBody && !invoiceTableBody._bound) {
+          invoiceTableBody.addEventListener('click', function(ev){
+            var t = ev.target;
+            if (!(t instanceof HTMLElement)) return;
+            var id = t.getAttribute('data-id');
+            if (!id) return;
+            if (t.classList.contains('inv-review')) openInvoiceReviewModal(id);
+            if (t.classList.contains('inv-post')) postInvoiceToMaintenance(id);
+            if (t.classList.contains('inv-del')) deleteInvoiceById(id);
+          });
+          invoiceTableBody._bound = true;
+        }
+
+        if (invoiceFilterStatusSel && !invoiceFilterStatusSel._bound) {
+          invoiceFilterStatusSel.addEventListener('change', function(){ invoiceFilter.status = invoiceFilterStatusSel.value || 'all'; renderInvoiceInbox(); });
+          invoiceFilterStatusSel._bound = true;
+        }
+        if (invoiceFilterSupplierSel && !invoiceFilterSupplierSel._bound) {
+          invoiceFilterSupplierSel.addEventListener('change', function(){ invoiceFilter.supplierId = invoiceFilterSupplierSel.value || 'all'; renderInvoiceInbox(); });
+          invoiceFilterSupplierSel._bound = true;
+        }
+        if (invoiceFilterPlantSel && !invoiceFilterPlantSel._bound) {
+          invoiceFilterPlantSel.addEventListener('change', function(){ invoiceFilter.plantId = invoiceFilterPlantSel.value || 'all'; renderInvoiceInbox(); });
+          invoiceFilterPlantSel._bound = true;
+        }
+        if (invoiceFilterClearBtn && !invoiceFilterClearBtn._bound) {
+          invoiceFilterClearBtn.addEventListener('click', function(){
+            invoiceFilter.status = 'all';
+            invoiceFilter.supplierId = 'all';
+            invoiceFilter.plantId = 'all';
+            if (invoiceFilterStatusSel) invoiceFilterStatusSel.value = 'all';
+            if (invoiceFilterSupplierSel) invoiceFilterSupplierSel.value = 'all';
+            if (invoiceFilterPlantSel) invoiceFilterPlantSel.value = 'all';
+            renderInvoiceInbox();
+          });
+          invoiceFilterClearBtn._bound = true;
+        }
+
+        if (invoiceSupplierForm && !invoiceSupplierForm._bound) {
+          invoiceSupplierForm.addEventListener('submit', function(e){
+            e.preventDefault();
+            var name = String((byId('invoice-supplier-name').value || '').trim());
+            if (!name) return;
+            upsertSupplierByName(name);
+            invoiceSupplierForm.reset();
+            refreshInvoiceUi();
+          });
+          invoiceSupplierForm._bound = true;
         }
 
         function openMaintenanceModal(plant){
@@ -2818,6 +3667,9 @@
               state.plantService = load(LS_KEYS.plantService, {}) || {};
               state.rateModels = load(LS_KEYS.rateModels, {}) || {};
               state.suppliers = load(LS_KEYS.suppliers, []) || [];
+              state.invoices = load(LS_KEYS.invoices, []) || [];
+              state.invoiceDocs = load(LS_KEYS.invoiceDocs, {}) || {};
+              ensureInvoiceStateShape();
 
               renderAll();
               alert('Import complete.');
@@ -2831,7 +3683,7 @@
         }
 
         function resetAllData(){
-          if (!confirm('This will delete ALL app data on this device (sites, plant, hires, maintenance, month-end readings, service settings, lifetime totals). This cannot be undone.\n\nContinue?')) return;
+          if (!confirm('This will delete ALL app data on this device (sites, plant, hires, maintenance, invoices, month-end readings, service settings, lifetime totals). This cannot be undone.\n\nContinue?')) return;
 
           try { Object.keys(LS_KEYS).forEach(function(k){ localStorage.removeItem(LS_KEYS[k]); }); } catch(e){}
 
@@ -2844,6 +3696,8 @@
           state.plantService = {};
           state.rateModels = {};
           state.suppliers = [];
+          state.invoices = [];
+          state.invoiceDocs = {};
 
           Object.keys(LS_KEYS).forEach(function(k){
             save(LS_KEYS[k], (k === 'alerts') ? {} : null);
@@ -3024,6 +3878,7 @@
 
         // ---------- App init ----------
         function renderAll(){
+          ensureInvoiceStateShape();
           renderSites();
           renderSiteSelects();
           renderReportSiteSelects();
@@ -3037,6 +3892,10 @@
           updateMaintBadge();
           renderMonthEndSection('yellow'); renderMonthEndSection('truck'); renderMonthEndSection('bakkie');
           renderHireFilters();
+          renderInvoiceFormOptions();
+          renderInvoiceFilters();
+          renderInvoiceInbox();
+          renderInvoiceSuppliers();
         }
 
         function init(){
@@ -3061,7 +3920,7 @@
           renderAll();
 
           var hash = (location.hash || '').replace('#','');
-          var mainId = (['hire','plant-sites','maintenance','reports','help'].indexOf(hash) >= 0) ? hash : 'hire';
+          var mainId = (['hire','plant-sites','maintenance','invoices','reports','help'].indexOf(hash) >= 0) ? hash : 'hire';
           activateMain(mainId);
         }
 
