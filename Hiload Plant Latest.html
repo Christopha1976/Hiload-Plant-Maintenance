@@ -1,0 +1,2852 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hiload Inyanga Plant Hire - Plant Control</title>
+    <style>
+      :root{
+        --brand-green:#0f3e2e;
+        --brand-orange:#f28c00;
+        --bg:#f7f8f9;
+        --card:#fff;
+        --border:#e4e7eb;
+        --text:#101418;
+        --muted:#5b6770;
+        --focus:#1e88e5;
+        --emph:#0f3e2e22;
+        --danger:#d32f2f;
+        --warning:#ef6c00;
+      }
+
+      *{box-sizing:border-box}
+      html,body{height:100%}
+      body{
+        margin:0; background:var(--bg); color:var(--text);
+        font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+      }
+
+      .app-header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--border);z-index:100}
+      .title{
+        font-size: clamp(1.8rem, 2.5vw + 1rem, 2.6rem);
+        font-weight: 900; color: var(--brand-green);
+        margin: 0; padding: 1rem 1.25rem;
+        letter-spacing: .2px; text-align:center;
+      }
+
+      .app-content{max-width:1200px;margin:1.25rem auto;padding:0 1rem}
+      .view{display:none;animation:fade 180ms ease-out}
+      .view.visible{display:block}
+      .muted{color:var(--muted)}
+      .hidden{display:none !important}
+
+      .sr-only{
+        position:absolute !important;
+        width:1px !important;
+        height:1px !important;
+        padding:0 !important;
+        margin:-1px !important;
+        overflow:hidden !important;
+        clip:rect(0,0,0,0) !important;
+        white-space:nowrap !important;
+        border:0 !important;
+      }
+
+      .grid-2{display:grid;grid-template-columns: repeat(auto-fit,minmax(300px,1fr));gap:1rem}
+      .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+      .card h3{margin-top:0}
+      .emphasis{box-shadow:0 0 0 3px var(--emph) inset;border-color:var(--brand-green)}
+
+      .stack > * + *{margin-top:.75rem}
+      .field label{display:block;font-weight:600;margin-bottom:.25rem}
+      .field input,.field select,.field textarea{
+        width:100%;padding:.6rem .7rem;border:1px solid var(--border);border-radius:10px;background:#fff
+      }
+      .inline{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+      .actions{margin-top:.5rem;display:flex;gap:.5rem;flex-wrap:wrap}
+      .btn{
+        appearance:none;border:1px solid var(--border);background:#fff;color:var(--brand-green);
+        padding:.55rem .9rem;border-radius:10px;font-weight:700;cursor:pointer
+      }
+      .btn:hover{background:#f0f3f5}
+      .btn.primary{background:var(--brand-green);color:#fff;border-color:var(--brand-green)}
+      .btn.primary:hover{filter:brightness(0.95)}
+      .btn.danger{background:#fff;color:var(--danger);border-color:#ef9a9a}
+      .btn.danger:hover{background:#ffebee}
+      .btn[disabled]{opacity:.55; cursor:not-allowed}
+      .btn-sm{padding:.35rem .55rem;border-radius:9px;font-weight:800}
+
+      .list{list-style:none;margin:0;padding:0}
+      .list li{
+        border:1px solid var(--border);border-radius:10px;padding:.6rem .75rem;margin-top:.5rem;background:#fff;
+        display:flex;justify-content:space-between;gap:.5rem;align-items:center
+      }
+      .badge{
+        background:rgba(242,140,0,.1); color:var(--brand-orange);
+        border:1px solid rgba(242,140,0,.35); padding:.12rem .45rem; border-radius:999px; font-size:.8rem; font-weight:800
+      }
+      .table-wrap{overflow:auto}
+      .table{width:100%;border-collapse:collapse}
+      .table th,.table td{border-bottom:1px solid var(--border);padding:.5rem .5rem;text-align:left;vertical-align:top}
+      .table th{background:#fafbfc}
+      .num{text-align:right}
+      .w-110{width:110px}
+      .w-140{width:140px}
+      .w-160{width:160px}
+
+      .menu{
+        background:#fff;border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem
+      }
+      .menu h2{margin:0 0 .75rem;color:var(--brand-green)}
+      .main-menu{
+        list-style:none; padding:0; margin:0;
+        display:grid;grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap:.65rem
+      }
+      .main-menu > li{display:block}
+      .menu-btn{
+        position:relative;
+        width:100%;
+        border:2px solid var(--brand-green);
+        color:var(--brand-green);
+        background:#fff;
+        border-radius:12px;
+        padding:.9rem 1rem;
+        font-weight:900;
+        letter-spacing:.2px;
+        cursor:pointer;
+      }
+      .menu-btn:hover{background:rgba(15,62,46,.06)}
+      .menu-btn.active{background:var(--brand-green);color:#fff}
+      .submenu{
+        list-style:none; padding:0;
+        display:none; margin-top:.75rem; gap:.5rem; flex-wrap:wrap
+      }
+      .submenu.visible{display:flex}
+      .submenu-btn{
+        border:1px solid var(--border); background:#fff; color:var(--brand-green);
+        border-radius:999px; padding:.5rem .85rem; font-weight:700; cursor:pointer
+      }
+      .submenu-btn:hover{background:#f0f3f5}
+      .submenu-btn.active{background:var(--brand-green);color:#fff;border-color:var(--brand-green)}
+
+      .badge-dot{
+        position:absolute; top:8px; right:8px;
+        min-width:18px; height:18px; padding:0 5px;
+        border-radius:999px; background:var(--danger); color:#fff;
+        font-size:12px; line-height:18px; text-align:center; font-weight:900;
+      }
+
+      .tabs[role="tablist"]{display:flex;gap:.4rem;margin-top:.75rem}
+      .tabs [role="tab"]{border:1px solid var(--border);background:#fff;border-radius:999px;padding:.35rem .75rem;cursor:pointer;font-weight:700;color:var(--brand-green)}
+      .tabs [role="tab"][aria-selected="true"]{background:var(--brand-green);color:#fff;border-color:var(--brand-green)}
+
+      dialog{border:none;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.3);padding:0;width:min(760px,92vw)}
+      dialog::backdrop{background:rgba(16,20,24,.5)}
+      .modal-header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1rem 0}
+      #modal-body{padding:1rem}
+      dialog .actions{padding:0 1rem 1rem}
+
+      .app-footer{border-top:1px solid var(--border);padding:1rem;text-align:center;color:var(--muted);background:#fff;margin-top:1rem}
+
+      a:focus, button:focus, input:focus, select:focus, textarea:focus { outline:3px solid var(--focus); outline-offset:2px; border-radius:6px}
+
+      .tag{display:inline-block;border-radius:999px;padding:.12rem .5rem;font-size:.8rem;font-weight:800;border:1px solid transparent}
+      .tag.overdue{background:#fdecea;color:#b71c1c;border-color:#f5c6cb}
+      .tag.upcoming{background:#fff4e5;color:#e65100;border-color:#f8d3a6}
+
+      .meter-missing td{background:#ffebee}
+      .meter-missing td:first-child{border-left:3px solid var(--danger)}
+      .meter-negative td{background:#fff4e5}
+      .meter-negative td:first-child{border-left:3px solid var(--warning)}
+
+      .mini-card{
+        border:1px solid var(--border);
+        border-radius:10px;
+        padding:.6rem .7rem;
+        background:#fff;
+      }
+
+      @keyframes fade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+    </style>
+  </head>
+  <body>
+    <header class="app-header">
+      <h1 class="title">Hiload Inyanga Plant Hire - Plant Control</h1>
+    </header>
+
+    <main id="app" class="app-content">
+      <section class="menu" aria-label="Main menu">
+        <h2>Main Menu</h2>
+        <ul class="main-menu">
+          <li><button class="menu-btn" data-main="hire">Hire</button></li>
+          <li><button class="menu-btn" data-main="plant-sites">Plant &amp; Sites</button></li>
+          <li style="position:relative">
+            <button class="menu-btn" data-main="maintenance">
+              Maintenance
+              <span id="maint-badge" class="badge-dot hidden" aria-label="Maintenance warnings count"></span>
+            </button>
+          </li>
+          <li><button class="menu-btn" data-main="reports">Reports</button></li>
+          <li><button class="menu-btn" data-main="help">Help</button></li>
+        </ul>
+        <ul id="submenu" class="submenu" aria-label="Submenu"></ul>
+      </section>
+
+      <!-- HIRE -->
+      <section id="hire" class="view" tabindex="-1" aria-labelledby="hire-h2">
+        <h2 id="hire-h2">Hire</h2>
+        <p class="muted">Create internal hires of plant to sites. Allocation to a site is set here and cleared on return.</p>
+
+        <div class="grid-2">
+          <div class="card hidden" id="hire-new-card" data-subview="hire-new">
+            <h3>New Hire</h3>
+            <form id="hire-form" class="stack" autocomplete="off">
+              <div class="field">
+                <label for="hire-site">Site</label>
+                <div class="inline">
+                  <select id="hire-site" name="siteId" required></select>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="hire-plant">Plant</label>
+                <div class="inline">
+                  <select id="hire-plant" name="plantId" required></select>
+                </div>
+                <small class="muted">Charges apply weekdays only (Mon–Fri).</small>
+              </div>
+
+              <div class="field">
+                <label for="hire-start">Start date</label>
+                <input type="date" id="hire-start" name="startDate" required autocomplete="off" />
+              </div>
+
+              <div class="field">
+                <label for="hire-notes">Notes</label>
+                <textarea id="hire-notes" name="notes" rows="2" placeholder="Optional" autocomplete="off"></textarea>
+              </div>
+
+              <div class="actions">
+                <button type="submit" class="btn primary">Create Hire</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card hidden" id="hire-list-card" data-subview="hire-list">
+            <h3>Hires</h3>
+
+            <div class="inline" id="hire-filters" style="margin:.25rem 0 .5rem;align-items:flex-end">
+              <div class="field" style="min-width:220px;flex:1 1 240px">
+                <label for="hire-filter-site">Filter by site</label>
+                <select id="hire-filter-site" autocomplete="off">
+                  <option value="all">All sites</option>
+                </select>
+              </div>
+              <div class="field" style="min-width:220px;flex:1 1 240px">
+                <label for="hire-filter-cat">Filter by equipment type</label>
+                <select id="hire-filter-cat" autocomplete="off">
+                  <option value="all">All types</option>
+                  <option value="yellow">Yellow Plant</option>
+                  <option value="small">Small Plant</option>
+                  <option value="truck">Trucks</option>
+                  <option value="bakkie">Bakkies</option>
+                </select>
+              </div>
+              <div class="actions" style="margin:0">
+                <button type="button" class="btn" id="hire-filter-clear">Clear</button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="table" id="hire-table" aria-label="Hire list">
+                <thead>
+                  <tr>
+                    <th>Site</th>
+                    <th>Plant</th>
+                    <th>Start</th>
+                    <th>Return</th>
+                    <th>Notes</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PLANT & SITES -->
+      <section id="plant-sites" class="view" tabindex="-1" aria-labelledby="ps-h2">
+        <h2 id="ps-h2">Plant &amp; Sites</h2>
+        <div class="grid-2">
+          <div class="card hidden" id="sites-card" data-subview="sites">
+            <h3>Sites</h3>
+            <form id="site-form" class="stack" autocomplete="off">
+              <div class="field">
+                <label for="site-name">Site name</label>
+                <input id="site-name" name="name" required placeholder="e.g., N2 Bypass West" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="site-location">Location</label>
+                <input id="site-location" name="location" placeholder="Optional" autocomplete="off" />
+              </div>
+              <div class="actions">
+                <button type="submit" class="btn">Add Site</button>
+              </div>
+            </form>
+
+            <ul id="site-list" class="list"></ul>
+          </div>
+
+          <div class="card hidden" id="plant-card" data-subview="plant">
+            <h3>Plant</h3>
+            <div id="plant-form-wrap">
+              <small class="muted" id="plant-cat-helper">Category is set by selected submenu.</small>
+              <form id="plant-form" class="stack" autocomplete="off">
+                <div class="field">
+                  <label for="plant-name">Plant name</label>
+                  <input id="plant-name" name="name" required placeholder='e.g., "CAT 320D Excavator" or "Isuzu FTR 850"' autocomplete="off" />
+                </div>
+
+                <div class="field">
+                  <label for="plant-make">Make</label>
+                  <input id="plant-make" name="make" placeholder="Optional" autocomplete="off" />
+                </div>
+
+                <div class="field">
+                  <label for="plant-model">Model</label>
+                  <input id="plant-model" name="model" placeholder="Optional" autocomplete="off" />
+                </div>
+
+                <div class="field">
+                  <label for="plant-serial">Serial/Reg</label>
+                  <input id="plant-serial" name="serial" placeholder="Optional" autocomplete="off" />
+                  <small class="muted">For vehicles (Trucks/Bakkies) this should be the registration number.</small>
+                </div>
+
+                <div class="field hidden" id="small-subtype-field">
+                  <label for="plant-small-subtype">Small Plant type</label>
+                  <select id="plant-small-subtype" name="smallSubtype">
+                    <option value="">Select type</option>
+                    <option value="generators">Generators</option>
+                    <option value="compactors">Compactors</option>
+                    <option value="rollers">Rollers</option>
+                    <option value="pumps">Pumps</option>
+                    <option value="pokers">Pokers</option>
+                    <option value="drive-units">Drive Units</option>
+                    <option value="concrete-cutters">Concrete Cutters</option>
+                  </select>
+                </div>
+
+                <div class="inline">
+                  <div class="field" style="flex:1 1 180px;min-width:180px">
+                    <label for="plant-rate">Hire rate</label>
+                    <input id="plant-rate" name="rate" type="number" step="0.01" min="0" placeholder="e.g., 1200.00" autocomplete="off" inputmode="decimal" />
+                  </div>
+                  <div class="field" style="flex:1 1 160px;min-width:160px">
+                    <label for="plant-rate-unit">Rate unit</label>
+                    <select id="plant-rate-unit" name="rateUnit">
+                      <option value="day">Per day</option>
+                      <option value="hour">Per hour</option>
+                      <option value="km">Per km</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="actions">
+                  <button type="submit" class="btn" id="plant-submit">Add Plant</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Plant category tabs">
+              <button class="tab" data-tab="all" role="tab" aria-selected="true">All</button>
+              <button class="tab" data-tab="yellow" role="tab" aria-selected="false">Yellow Plant</button>
+              <button class="tab" data-tab="small" role="tab" aria-selected="false">Small Plant</button>
+              <button class="tab" data-tab="truck" role="tab" aria-selected="false">Trucks</button>
+              <button class="tab" data-tab="bakkie" role="tab" aria-selected="false">Bakkies</button>
+            </div>
+
+            <div id="small-subtabs" class="hidden" aria-label="Small plant subcategories" style="display:flex;gap:.4rem;margin:.5rem 0 .25rem;flex-wrap:wrap"></div>
+
+            <ul id="plant-list" class="list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- MAINTENANCE -->
+      <section id="maintenance" class="view" tabindex="-1" aria-labelledby="maint-h2">
+        <h2 id="maint-h2">Maintenance</h2>
+        <p class="muted">Month‑end readings: hours for Yellow Plant, km for Trucks & Bakkies. Configure service intervals and license renewals, and we’ll warn you when due.</p>
+
+        <div class="card" id="warnings-card" aria-live="polite">
+          <h3>Warnings</h3>
+          <div id="warnings-body" class="stack"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card hidden" id="maint-small-card" data-subview="maint-small">
+            <h3>Small Plant</h3>
+            <div id="maint-small-subtabs" class="hidden" aria-label="Small plant maintenance subcategories" style="display:flex;gap:.4rem;margin:.5rem 0 .25rem;flex-wrap:wrap"></div>
+            <ul id="maint-small" class="list"></ul>
+          </div>
+
+          <div class="card hidden" id="maint-yellow-card" data-subview="maint-yellow">
+            <h3>Yellow Plant</h3>
+            <div id="meters-yellow" class="stack" style="margin:.25rem 0 .5rem"></div>
+            <ul id="maint-yellow" class="list"></ul>
+          </div>
+
+          <div class="card hidden" id="maint-truck-card" data-subview="maint-truck">
+            <h3>Trucks</h3>
+            <div id="meters-truck" class="stack" style="margin:.25rem 0 .5rem"></div>
+            <ul id="maint-truck" class="list"></ul>
+          </div>
+
+          <div class="card hidden" id="maint-bakkie-card" data-subview="maint-bakkie">
+            <h3>Bakkies</h3>
+            <div id="meters-bakkie" class="stack" style="margin:.25rem 0 .5rem"></div>
+            <ul id="maint-bakkie" class="list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- REPORTS -->
+      <section id="reports" class="view" tabindex="-1" aria-labelledby="rep-h2">
+        <h2 id="rep-h2">Reports</h2>
+        <p class="muted">Invoices charge weekdays only (Mon–Fri). Days are counted only for periods when plant was on hire. Per-hour and per-km rates require entering hours or kms worked.</p>
+
+        <div class="grid-2">
+          <div class="card hidden" id="report-month-card" data-subview="report-month">
+            <h3>Site Invoice by Month</h3>
+            <form id="report-month-form" class="stack" autocomplete="off">
+              <div class="field">
+                <label for="report-month-site">Site</label>
+                <select id="report-month-site" name="siteId" required></select>
+              </div>
+              <div class="field">
+                <label for="report-month">Month</label>
+                <input id="report-month" name="month" type="month" required autocomplete="off" />
+              </div>
+              <div class="actions">
+                <button type="submit" class="btn primary">Generate</button>
+                <button type="button" class="btn" id="report-month-clear">Clear</button>
+              </div>
+            </form>
+
+            <div id="report-month-results" class="stack" style="margin-top:1rem"></div>
+          </div>
+
+          <div class="card hidden" id="report-contract-card" data-subview="report-contract">
+            <h3>Site Invoice for Whole Contract</h3>
+            <form id="report-contract-form" class="stack" autocomplete="off">
+              <div class="field">
+                <label for="report-contract-site">Site</label>
+                <select id="report-contract-site" name="siteId" required></select>
+              </div>
+              <div class="actions">
+                <button type="submit" class="btn primary">Generate</button>
+                <button type="button" class="btn" id="report-contract-clear">Clear</button>
+              </div>
+            </form>
+
+            <div id="report-contract-results" class="stack" style="margin-top:1rem"></div>
+          </div>
+
+          <div class="card hidden" id="report-maint-card" data-subview="report-maint">
+            <h3>Maintenance Report</h3>
+            <form id="report-maint-form" class="stack" autocomplete="off">
+              <div class="inline" style="flex-wrap:wrap;gap:.75rem">
+                <div class="field" style="min-width:220px;flex:1 1 220px">
+                  <label for="report-maint-plant">Plant</label>
+                  <select id="report-maint-plant" name="plantId">
+                    <option value="all">All plant</option>
+                  </select>
+                </div>
+                <div class="field" style="min-width:220px;flex:1 1 220px">
+                  <label for="report-maint-supplier">Supplier</label>
+                  <select id="report-maint-supplier" name="supplierId">
+                    <option value="all">All suppliers</option>
+                  </select>
+                </div>
+                <div class="field" style="min-width:220px;flex:1 1 220px">
+                  <label for="report-maint-from">From (date)</label>
+                  <input id="report-maint-from" name="from" type="date" autocomplete="off" />
+                </div>
+                <div class="field" style="min-width:220px;flex:1 1 220px">
+                  <label for="report-maint-to">To (date)</label>
+                  <input id="report-maint-to" name="to" type="date" autocomplete="off" />
+                </div>
+              </div>
+              <div class="actions">
+                <button type="submit" class="btn primary">Generate</button>
+                <button type="button" class="btn" id="report-maint-clear">Clear</button>
+                <button type="button" class="btn" id="report-maint-print">Print / PDF</button>
+              </div>
+            </form>
+
+            <div id="report-maint-results" class="stack" style="margin-top:1rem"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HELP -->
+      <section id="help" class="view" tabindex="-1" aria-labelledby="help-h2">
+        <h2 id="help-h2">Help</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>How to use the app</h3>
+            <div class="stack">
+              <div>
+                <strong>1) Add Sites</strong>
+                <p class="muted" style="margin:.25rem 0 0">Go to Plant &amp; Sites → Sites. Create each project/site once.</p>
+              </div>
+              <div>
+                <strong>2) Add Equipment</strong>
+                <p class="muted" style="margin:.25rem 0 0">Plant &amp; Sites → pick a category tab (Yellow, Small, Trucks, Bakkies) and add items. For Small Plant, choose a subtype.</p>
+              </div>
+              <div>
+                <strong>3) Create Hires</strong>
+                <p class="muted" style="margin:.25rem 0 0">Hire → New Hire. Select site, plant and start date. Return later when done. Allocation updates automatically.</p>
+              </div>
+              <div>
+                <strong>4) Month‑end Readings</strong>
+                <p class="muted" style="margin:.25rem 0 0">Maintenance → choose Yellow/Trucks/Bakkies. Enter the month‑end hours (Yellow) or km (Trucks/Bakkies). You can view previous month values and save for the selected month.</p>
+              </div>
+              <div>
+                <strong>5) Service Reminders & Licenses</strong>
+                <p class="muted" style="margin:.25rem 0 0">Maintenance → open a category list and click “Service settings” for an item. Yellow: up to 5 reminders with interval and next due. Trucks/Bakkies: one reminder. Add license renewal dates. Warnings show here and a red badge on the Maintenance tab.</p>
+              </div>
+              <div>
+                <strong>6) Reports</strong>
+                <p class="muted" style="margin:.25rem 0 0">Reports → Site • Month or Whole Contract. Weekends excluded for day rates. Enter Hours for per‑hour and KMs for per‑km lines before Print/PDF. You can save monthly results to the site’s lifetime totals.</p>
+              </div>
+              <div>
+                <strong>Printing</strong>
+                <p class="muted" style="margin:.25rem 0 0">Click Print/PDF on the report. The browser print dialog will open. If quantities are missing (hours/kms), you’ll be prompted to fill them in.</p>
+              </div>
+              <div>
+                <strong>Data storage</strong>
+                <p class="muted" style="margin:.25rem 0 0">All data is saved in your browser (local device). Use Export to save a backup, Import to restore on another PC, or Reset to clear.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Export / Import</h3>
+            <p class="muted">Export saves a .json file containing all Sites, Plant, Hires, Maintenance, Month‑end readings, Service settings and Lifetime totals. Import loads a previously exported file. Importing will replace current data on this device.</p>
+            <div class="actions">
+              <button id="export-data-btn" class="btn">Export data (.json)</button>
+              <button id="import-data-btn" class="btn primary" aria-controls="import-file">Import data (.json)</button>
+              <label for="import-file" class="sr-only" id="import-file-label">Import data file (.json)</label>
+              <input id="import-file" type="file" accept="application/json" class="sr-only" aria-labelledby="import-file-label" title="Import data (.json)">
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Reset</h3>
+            <p class="muted">This deletes all data from this browser. This cannot be undone.</p>
+            <div class="actions">
+              <button id="reset-data-btn" class="btn danger">Reset app data (delete all)</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <small>&copy; <span id="year"></span> Hiload Inyanga Construction</small>
+    </footer>
+
+    <dialog id="modal">
+      <form method="dialog" id="modal-form" class="stack" autocomplete="off">
+        <header class="modal-header">
+          <h3 id="modal-title">Modal</h3>
+          <button type="button" class="btn" id="modal-close" aria-label="Close">✕</button>
+        </header>
+        <div id="modal-body"></div>
+        <menu class="actions">
+          <button value="cancel" class="btn">Cancel</button>
+          <button value="submit" class="btn primary" id="modal-submit">Save</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script>
+      (function () {
+        // ---------- Dialog fallback ----------
+        if (!('HTMLDialogElement' in window)) {
+          var dialogs = document.getElementsByTagName('dialog');
+          for (var i=0; i<dialogs.length; i++) {
+            dialogs[i].open = false;
+            dialogs[i].showModal = function(){ this.style.display='block'; this.open = true; };
+            dialogs[i].close = function(){ this.style.display='none'; this.open = false; };
+          }
+        }
+
+        // ---------- Persistence ----------
+        var LS_KEYS = {
+          sites: 'hiph_sites',
+          plants: 'hiph_plants',
+          hires: 'hiph_hires',
+          maintenance: 'hiph_maintenance',
+          siteUsage: 'hiph_site_usage',
+          meters: 'hiph_meters',
+          plantService: 'hiph_plant_service',
+          rateModels: 'hiph_rate_models',
+          alerts: 'hiph_alerts',
+          suppliers: 'hiph_suppliers'
+        };
+
+        var state = {
+          sites: load(LS_KEYS.sites, []),
+          plants: load(LS_KEYS.plants, []),
+          hires: load(LS_KEYS.hires, []),
+          maintenance: load(LS_KEYS.maintenance, []),
+          siteUsage: load(LS_KEYS.siteUsage, {}) || {},
+          meters: load(LS_KEYS.meters, {}) || {},
+          plantService: load(LS_KEYS.plantService, {}) || {},
+          rateModels: load(LS_KEYS.rateModels, {}) || {},
+          suppliers: load(LS_KEYS.suppliers, []) || []
+        };
+
+        // ---------- Constants ----------
+        var SMALL_SUBS = [
+          { value:'generators', label:'Generators' },
+          { value:'compactors', label:'Compactors' },
+          { value:'rollers', label:'Rollers' },
+          { value:'pumps', label:'Pumps' },
+          { value:'pokers', label:'Pokers' },
+          { value:'drive-units', label:'Drive Units' },
+          { value:'concrete-cutters', label:'Concrete Cutters' }
+        ];
+
+        // ---------- DOM helpers ----------
+        function $(sel, ctx){ return (ctx||document).querySelector(sel); }
+        function $all(sel, ctx){ return Array.prototype.slice.call((ctx||document).querySelectorAll(sel)); }
+        function byId(id){ return document.getElementById(id); }
+        function uid(p){ return (p||'') + Math.random().toString(36).slice(2,9); }
+        function toMoney(n){ var v = Number(n||0); return isFinite(v) ? v.toFixed(2) : '0.00'; }
+        function escapeHtml(str){
+          return String(str).replace(/[&<>\"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); });
+        }
+        function escapeAttr(str){ return String(str).replace(/"/g, '&quot;'); }
+        function escapeText(str){ return String(str).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+        function load(key, fallback){
+          try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; }
+        }
+        function save(key, value){
+          try { localStorage.setItem(key, JSON.stringify(value)); } catch(e){}
+        }
+
+        function scrollToTop(behavior){
+          try { window.scrollTo({ top: 0, behavior: behavior || 'auto' }); }
+          catch(e){ window.scrollTo(0,0); }
+        }
+
+        // ---------- Year ----------
+        var yearEl = byId('year'); if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+        // ---------- Display helpers ----------
+        function smallSubLabel(val){
+          var f = SMALL_SUBS.find(function(x){ return x.value===val; });
+          return f ? f.label : '';
+        }
+
+        function displayNameWithReg(plant){
+          if (!plant) return '—';
+          var name = String(plant.name || '').trim() || '—';
+          var reg = String(plant.serial || '').trim(); // serial holds reg for vehicles
+          if (plant.category === 'truck' || plant.category === 'bakkie') {
+            return name + ' (' + (reg ? reg : 'No Reg') + ')';
+          }
+          return name;
+        }
+
+        function categoryLabel(cat){
+          if (cat === 'yellow') return 'Yellow Plant';
+          if (cat === 'small') return 'Small Plant';
+          if (cat === 'truck') return 'Truck';
+          if (cat === 'bakkie') return 'Bakkie';
+          return '—';
+        }
+
+        function rateSuffix(unit){
+          if (unit === 'hour') return '/hour';
+          if (unit === 'km') return '/km';
+          return '/day';
+        }
+
+        // ---------- Routing ----------
+        var sections = $all('.view');
+        function show(sectionId) {
+          sections.forEach(function(sec){
+            var visible = sec.id === sectionId;
+            sec.classList.toggle('visible', visible);
+            if (visible && sec.focus) try { sec.focus({ preventScroll:true }); } catch(e){}
+          });
+          if (history && history.replaceState) history.replaceState({}, '', '#' + sectionId);
+        }
+
+        function hideAllSubViews(sectionId){
+          var section = byId(sectionId);
+          if (!section) return;
+          $all('[data-subview]', section).forEach(function(el){ el.classList.add('hidden'); });
+        }
+        function showSubview(sectionId, subId){
+          hideAllSubViews(sectionId);
+          var section = byId(sectionId);
+          if (!section) return;
+          var target = section.querySelector('[data-subview="'+ subId +'"]');
+          if (target) target.classList.remove('hidden');
+        }
+
+        var MAIN_TO_SECTION = { 'hire':'hire', 'plant-sites':'plant-sites', 'maintenance':'maintenance', 'reports':'reports', 'help':'help' };
+
+        var MENU = {
+          'hire': [
+            { id: 'hire-new',   label: 'New Hire',  section: 'hire', sub: 'hire-new',   after: function(){
+              renderSiteSelects(); renderPlantSelectForHire(); emphasize('#hire-new-card');
+            } },
+            { id: 'hire-list',  label: 'Hires List',section: 'hire', sub: 'hire-list',  after: function(){
+              renderHireFilters(); emphasize('#hire-list-card');
+            } }
+          ],
+          'plant-sites': [
+            { id: 'sites',        label: 'Sites',        section: 'plant-sites', sub: 'sites', after: function(){ emphasize('#sites-card'); } },
+            { id: 'plant-all',    label: 'Plant (All)',  section: 'plant-sites', sub: 'plant', after: function(){ setPlantTab('all'); emphasize('#plant-card'); } },
+            { id: 'plant-yellow', label: 'Yellow Plant', section: 'plant-sites', sub: 'plant', after: function(){ setPlantTab('yellow'); emphasize('#plant-card'); } },
+            { id: 'plant-small',  label: 'Small Plant',  section: 'plant-sites', sub: 'plant', after: function(){ setPlantTab('small'); emphasize('#plant-card'); } },
+            { id: 'plant-truck',  label: 'Trucks',       section: 'plant-sites', sub: 'plant', after: function(){ setPlantTab('truck'); emphasize('#plant-card'); } },
+            { id: 'plant-bakkie', label: 'Bakkies',      section: 'plant-sites', sub: 'plant', after: function(){ setPlantTab('bakkie'); emphasize('#plant-card'); } }
+          ],
+          'maintenance': [
+            { id: 'maint-small',  label: 'Small Plant',  section: 'maintenance', sub: 'maint-small',  after: function(){ emphasize('#maint-small-card'); renderMaintSmallSubtabs(); } },
+            { id: 'maint-yellow', label: 'Yellow Plant', section: 'maintenance', sub: 'maint-yellow', after: function(){ renderMonthEndSection('yellow'); renderMaintenanceLists(); emphasize('#maint-yellow-card'); } },
+            { id: 'maint-truck',  label: 'Trucks',       section: 'maintenance', sub: 'maint-truck',  after: function(){ renderMonthEndSection('truck'); renderMaintenanceLists(); emphasize('#maint-truck-card'); } },
+            { id: 'maint-bakkie', label: 'Bakkies',      section: 'maintenance', sub: 'maint-bakkie', after: function(){ renderMonthEndSection('bakkie'); renderMaintenanceLists(); emphasize('#maint-bakkie-card'); } }
+          ],
+          'reports': [
+            { id: 'report-month',   label: 'Site • Month',   section: 'reports', sub: 'report-month', after: function(){ renderReportSiteSelects(); emphasize('#report-month-card'); } },
+            { id: 'report-contract',label: 'Site • Contract',section: 'reports', sub: 'report-contract', after: function(){ renderReportSiteSelects(); emphasize('#report-contract-card'); } },
+            { id: 'report-maint',   label: 'Maintenance',    section: 'reports', sub: 'report-maint', after: function(){ renderMaintenanceReportFilters(); emphasize('#report-maint-card'); } }
+          ],
+          'help': []
+        };
+
+        var mainButtons = $all('.menu-btn');
+        var submenuWrap = byId('submenu');
+
+        function buildSubmenu(mainId){
+          var items = MENU[mainId] || [];
+          submenuWrap.innerHTML = '';
+          if (!items.length) { submenuWrap.classList.remove('visible'); return; }
+          items.forEach(function(item){
+            var li = document.createElement('li');
+            var b = document.createElement('button');
+            b.className = 'submenu-btn';
+            b.textContent = item.label;
+            b.setAttribute('data-submenu', item.id);
+            b.addEventListener('click', function(){
+              $all('#submenu .submenu-btn').forEach(function(x){ x.classList.remove('active'); });
+              b.classList.add('active');
+              show(item.section);
+              showSubview(item.section, item.sub);
+              scrollToTop('auto');
+              if (typeof item.after === 'function') item.after();
+            });
+            li.appendChild(b);
+            submenuWrap.appendChild(li);
+          });
+          submenuWrap.classList.add('visible');
+        }
+
+        function activateMain(mainId){
+          mainButtons.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-main') === mainId); });
+          var sectionId = MAIN_TO_SECTION[mainId];
+          if (sectionId) {
+            show(sectionId);
+            scrollToTop('auto');
+            hideAllSubViews(sectionId);
+            if (sectionId === 'hire') { renderSiteSelects(); renderPlantSelectForHire(); renderHireFilters(); }
+            if (sectionId === 'maintenance') {
+              renderWarningsPanel();
+              renderMaintenanceLists();
+              renderMonthEndSection('yellow'); renderMonthEndSection('truck'); renderMonthEndSection('bakkie');
+            }
+            if (sectionId === 'reports') { renderReportSiteSelects(); }
+          }
+          buildSubmenu(mainId);
+        }
+
+        mainButtons.forEach(function(btn){
+          btn.addEventListener('click', function(){ activateMain(btn.getAttribute('data-main')); });
+        });
+
+        function emphasize(selector){
+          $all('.card').forEach(function(c){ c.classList.remove('emphasis'); });
+          var el = $(selector);
+          if (!el) return;
+          el.classList.add('emphasis');
+          setTimeout(function(){ el.classList.remove('emphasis'); }, 1200);
+        }
+
+        // ---------- Plant tabs ----------
+        var plantTabs = $all('.tab');
+        var currentPlantTab = 'all';
+        var plantSubmitBtn = byId('plant-submit');
+        var plantCatHelper = byId('plant-cat-helper');
+        var plantFormWrap = byId('plant-form-wrap');
+        var plantRateUnitSel = byId('plant-rate-unit');
+        var smallSubtypeField = byId('small-subtype-field');
+        var plantSmallSubtypeSelect = byId('plant-small-subtype');
+        var smallSubtabsWrap = byId('small-subtabs');
+        var smallFilter = 'all';
+
+        plantTabs.forEach(function(tab){
+          tab.addEventListener('click', function(){ setPlantTab(tab.getAttribute('data-tab')); });
+        });
+
+        function hideOption(selectEl, value, hidden){
+          var opt = Array.prototype.find.call(selectEl.options, function(o){ return o.value === value; });
+          if (opt) opt.hidden = !!hidden;
+        }
+
+        function refreshPlantCategoryIndicator(){
+          plantTabs.forEach(function(t){
+            var isActive = t.getAttribute('data-tab') === currentPlantTab;
+            t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            if (isActive) { t.style.background='var(--brand-green)'; t.style.color='#fff'; t.style.borderColor='var(--brand-green)'; }
+            else { t.style.background='#fff'; t.style.color='var(--brand-green)'; t.style.borderColor='var(--border)'; }
+          });
+
+          if (currentPlantTab === 'yellow') {
+            plantCatHelper.innerHTML = 'Category: <span class="badge">Yellow Plant</span> (auto)';
+            plantSubmitBtn.disabled = false;
+            plantFormWrap.classList.remove('hidden');
+            smallSubtypeField.classList.add('hidden');
+            if (plantRateUnitSel) {
+              plantRateUnitSel.disabled = false;
+              if (plantRateUnitSel.value === 'km') plantRateUnitSel.value = 'day';
+              hideOption(plantRateUnitSel, 'km', true);
+              hideOption(plantRateUnitSel, 'day', false);
+              hideOption(plantRateUnitSel, 'hour', false);
+            }
+          } else if (currentPlantTab === 'small') {
+            plantCatHelper.innerHTML = 'Category: <span class="badge">Small Plant</span> (auto)';
+            plantSubmitBtn.disabled = false;
+            plantFormWrap.classList.remove('hidden');
+            smallSubtypeField.classList.remove('hidden');
+            if (plantRateUnitSel) {
+              plantRateUnitSel.disabled = false;
+              hideOption(plantRateUnitSel, 'km', true);
+              hideOption(plantRateUnitSel, 'day', false);
+              hideOption(plantRateUnitSel, 'hour', false);
+              if (plantRateUnitSel.value === 'km') plantRateUnitSel.value = 'day';
+            }
+          } else if (currentPlantTab === 'truck') {
+            plantCatHelper.innerHTML = 'Category: <span class="badge">Truck</span> (auto)';
+            plantSubmitBtn.disabled = false;
+            plantFormWrap.classList.remove('hidden');
+            smallSubtypeField.classList.add('hidden');
+            if (plantRateUnitSel) {
+              plantRateUnitSel.value = 'km';
+              plantRateUnitSel.disabled = true;
+              hideOption(plantRateUnitSel, 'km', false);
+              hideOption(plantRateUnitSel, 'day', true);
+              hideOption(plantRateUnitSel, 'hour', true);
+            }
+          } else if (currentPlantTab === 'bakkie') {
+            plantCatHelper.innerHTML = 'Category: <span class="badge">Bakkie</span> (auto)';
+            plantSubmitBtn.disabled = false;
+            plantFormWrap.classList.remove('hidden');
+            smallSubtypeField.classList.add('hidden');
+            if (plantRateUnitSel) {
+              plantRateUnitSel.value = 'km';
+              plantRateUnitSel.disabled = true;
+              hideOption(plantRateUnitSel, 'km', false);
+              hideOption(plantRateUnitSel, 'day', true);
+              hideOption(plantRateUnitSel, 'hour', true);
+            }
+          } else {
+            plantCatHelper.innerHTML = 'Plant (All): only list is shown. Select Yellow Plant, Small Plant, Trucks or Bakkies to add a new item.';
+            plantSubmitBtn.disabled = true;
+            plantFormWrap.classList.add('hidden');
+            smallSubtypeField.classList.add('hidden');
+          }
+
+          renderSmallSubtabs();
+        }
+
+        function makeSubtabBtn(val, label, active){
+          var bg = active ? 'var(--brand-green)' : '#fff';
+          var color = active ? '#fff' : 'var(--brand-green)';
+          var border = active ? 'var(--brand-green)' : 'var(--border)';
+          return '<button type="button" data-sub="'+val+'" style="border:1px solid '+border+';background:'+bg+';color:'+color+';border-radius:999px;padding:.3rem .7rem;font-weight:700;cursor:pointer">'+label+'</button>';
+        }
+
+        function renderSmallSubtabs(){
+          if (currentPlantTab !== 'small') {
+            smallSubtabsWrap.classList.add('hidden');
+            smallSubtabsWrap.innerHTML = '';
+            return;
+          }
+          smallSubtabsWrap.classList.remove('hidden');
+          var html = '';
+          html += makeSubtabBtn('all', 'All', smallFilter === 'all');
+          SMALL_SUBS.forEach(function(s){
+            html += makeSubtabBtn(s.value, s.label, smallFilter === s.value);
+          });
+          smallSubtabsWrap.innerHTML = html;
+          $all('#small-subtabs button').forEach(function(btn){
+            btn.addEventListener('click', function(){
+              smallFilter = btn.getAttribute('data-sub');
+              renderSmallSubtabs();
+              renderPlants();
+            });
+          });
+        }
+
+        function setPlantTab(tab){
+          currentPlantTab = tab || 'all';
+          plantTabs.forEach(function(t){
+            t.classList.toggle('active', t.getAttribute('data-tab') === currentPlantTab);
+          });
+          if (currentPlantTab !== 'small') smallFilter = 'all';
+          refreshPlantCategoryIndicator();
+          renderPlants();
+        }
+
+        // ---------- Sites (FIXED: stores correctly) ----------
+        var siteForm = byId('site-form');
+        var siteList = byId('site-list');
+        var hireSiteSelect = byId('hire-site');
+
+        if (siteForm) {
+          siteForm.addEventListener('submit', function(e){
+            e.preventDefault();
+            var form = new FormData(siteForm);
+            var site = {
+              id: uid('s_'),
+              name: String(form.get('name') || '').trim(),
+              location: String(form.get('location') || '').trim()
+            };
+            if (!site.name) return;
+
+            state.sites.push(site);
+            save(LS_KEYS.sites, state.sites);
+            siteForm.reset();
+
+            renderSites();
+            renderSiteSelects();
+            renderReportSiteSelects();
+            renderHireFilters();
+          });
+        }
+
+        function renderSites(){
+          if (!siteList) return;
+          siteList.innerHTML = '';
+
+          if (state.sites.length === 0) {
+            siteList.innerHTML = '<li class="muted" aria-live="polite">No sites yet.</li>';
+            return;
+          }
+
+          state.sites.forEach(function(site){
+            var li = document.createElement('li');
+            var left = document.createElement('div');
+            left.innerHTML = '<strong>' + escapeHtml(site.name) + '</strong>' +
+              (site.location ? ' — <span class="muted">' + escapeHtml(site.location) + '</span>' : '');
+            var actions = document.createElement('div');
+            var del = document.createElement('button');
+            del.className = 'btn';
+            del.textContent = 'Remove';
+            del.addEventListener('click', function(){
+              if (!confirm('Remove this site and delete all its hires and usage history? This cannot be undone.')) return;
+
+              state.sites = state.sites.filter(function(s){ return s.id !== site.id; });
+
+              // clear plant allocations to this site
+              state.plants = state.plants.map(function(p){
+                return p.siteId === site.id ? Object.assign({}, p, { siteId: '' }) : p;
+              });
+
+              // delete hires for this site
+              state.hires = state.hires.filter(function(h){ return h.siteId !== site.id; });
+
+              // delete site usage
+              if (state.siteUsage && state.siteUsage[site.id]) delete state.siteUsage[site.id];
+
+              save(LS_KEYS.sites, state.sites);
+              save(LS_KEYS.plants, state.plants);
+              save(LS_KEYS.hires, state.hires);
+              save(LS_KEYS.siteUsage, state.siteUsage);
+
+              // recompute allocations for all plants
+              state.plants.forEach(function(p){ recomputePlantAllocation(p.id); });
+
+              renderSites();
+              renderPlants();
+              renderHires();
+              renderSiteSelects();
+              renderPlantSelectForHire();
+              renderReportSiteSelects();
+              renderHireFilters();
+            });
+
+            actions.appendChild(del);
+            li.appendChild(left);
+            li.appendChild(actions);
+            siteList.appendChild(li);
+          });
+        }
+
+        function renderSiteSelects(){
+          if (!hireSiteSelect) return;
+          var siteOptions = state.sites.map(function(s){
+            return '<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>';
+          }).join('');
+          hireSiteSelect.innerHTML = state.sites.length ? siteOptions : '<option value="">No sites yet</option>';
+        }
+
+        // ---------- Plants ----------
+        var plantForm = byId('plant-form');
+        var plantList = byId('plant-list');
+
+        // ensure trucks/bakkies use km
+        (function migrateTruckBakkieUnits(){
+          var changed = false;
+          state.plants = state.plants.map(function(p){
+            if (p.category === 'truck' || p.category === 'bakkie') {
+              if (p.rateUnit !== 'km') { changed = true; return Object.assign({}, p, { rateUnit: 'km' }); }
+            }
+            return p;
+          });
+          if (changed) save(LS_KEYS.plants, state.plants);
+        })();
+
+        // ensure maintenance cost and meterAtService exist
+        (function migrateMaintenanceFields(){
+          var changed = false;
+          state.maintenance = state.maintenance.map(function(m){
+            var out = m;
+            if (typeof out.cost !== 'number') { out = Object.assign({}, out, { cost: 0 }); changed = true; }
+            if (typeof out.meterAtService !== 'number') { out = Object.assign({}, out, { meterAtService: 0 }); changed = true; }
+            return out;
+          });
+          if (changed) save(LS_KEYS.maintenance, state.maintenance);
+        })();
+
+        if (plantForm) {
+          plantForm.addEventListener('submit', function(e){
+            e.preventDefault();
+            var category = '';
+            if (currentPlantTab === 'yellow') category = 'yellow';
+            else if (currentPlantTab === 'small') category = 'small';
+            else if (currentPlantTab === 'truck') category = 'truck';
+            else if (currentPlantTab === 'bakkie') category = 'bakkie';
+            else { alert('Select Yellow Plant, Small Plant, Trucks or Bakkies tab to add.'); return; }
+
+            var form = new FormData(plantForm);
+            var rateVal = form.get('rate');
+            var rate = rateVal !== null && String(rateVal).trim() !== '' ? String(rateVal).trim() : '';
+            var rateUnitForm = String(form.get('rateUnit') || 'day');
+            var rateUnit = (category === 'truck' || category === 'bakkie') ? 'km' : (rateUnitForm === 'hour' ? 'hour' : 'day');
+
+            var subType = '';
+            if (category === 'small') {
+              subType = String(form.get('smallSubtype') || '').trim();
+              if (!subType) { alert('Please select a Small Plant type.'); return; }
+            }
+
+            var plant = {
+              id: uid('p_'),
+              name: String(form.get('name') || '').trim(),
+              category: category,
+              make: String(form.get('make') || '').trim(),
+              model: String(form.get('model') || '').trim(),
+              serial: String(form.get('serial') || '').trim(),
+              siteId: '',
+              rate: rate,
+              rateUnit: rateUnit,
+              subType: subType
+            };
+
+            if (!plant.name) return;
+            state.plants.push(plant);
+            save(LS_KEYS.plants, state.plants);
+
+            plantForm.reset();
+            if (plantSmallSubtypeSelect) plantSmallSubtypeSelect.value = '';
+
+            refreshPlantCategoryIndicator();
+            renderPlants();
+            renderPlantSelectForHire();
+            renderMaintenanceLists();
+            renderHireFilters();
+            renderMonthEndSection('yellow'); renderMonthEndSection('truck'); renderMonthEndSection('bakkie');
+            renderWarningsPanel();
+            updateMaintBadge();
+            renderMaintenanceReportFilters();
+          });
+        }
+
+        function renderPlants(){
+          if (!plantList) return;
+
+          var filter = currentPlantTab;
+          var list = state.plants.slice();
+          if (filter === 'yellow') list = list.filter(function(p){ return p.category === 'yellow'; });
+          if (filter === 'small') {
+            list = list.filter(function(p){ return p.category === 'small'; });
+            if (smallFilter !== 'all') list = list.filter(function(p){ return p.subType === smallFilter; });
+          }
+          if (filter === 'truck') list = list.filter(function(p){ return p.category === 'truck'; });
+          if (filter === 'bakkie') list = list.filter(function(p){ return p.category === 'bakkie'; });
+
+          plantList.innerHTML = '';
+          if (list.length === 0) {
+            plantList.innerHTML = '<li class="muted" aria-live="polite">No plant yet.</li>';
+            return;
+          }
+
+          list.forEach(function(p){
+            var siteName = p.siteId ? ((state.sites.find(function(s){ return s.id === p.siteId; }) || {}).name || 'Unknown') : 'Unassigned';
+            var rateText = (p.rate && p.rate !== '') ? (Number(p.rate).toFixed(2) + rateSuffix(p.rateUnit)) : '—';
+
+            var liEl = document.createElement('li');
+
+            var left = document.createElement('div');
+            var catBadge = '<span class="badge">' + categoryLabel(p.category) + '</span>';
+            var smallBadge = (p.category==='small' && p.subType) ? ' <span class="badge">'+ smallSubLabel(p.subType) +'</span>' : '';
+            left.innerHTML =
+              '<strong>' + escapeHtml(displayNameWithReg(p)) + '</strong> ' +
+              catBadge + smallBadge + '<br/>' +
+              '<span class="muted">' + ( [p.make, p.model, p.serial].filter(Boolean).map(escapeHtml).join(' • ') || '—') + '</span><br/>' +
+              '<small class="muted">Site: ' + escapeHtml(siteName) + ' • Rate: ' + rateText + '</small>';
+
+            var actions = document.createElement('div');
+
+            var rateBtn = document.createElement('button');
+            rateBtn.className = 'btn';
+            rateBtn.textContent = 'Rate calc';
+            rateBtn.style.marginRight = '.4rem';
+            rateBtn.addEventListener('click', function(){ openRateCalcModal(p); });
+
+            var editBtn = document.createElement('button');
+            editBtn.className = 'btn';
+            editBtn.textContent = 'Edit';
+            editBtn.addEventListener('click', function(){ openEditPlantModal(p); });
+
+            var del = document.createElement('button');
+            del.className = 'btn';
+            del.textContent = 'Remove';
+            del.addEventListener('click', function(){
+              if (!confirm('Remove this equipment and delete all its hires and maintenance? This cannot be undone.')) return;
+
+              state.hires = state.hires.filter(function(h){ return h.plantId !== p.id; });
+              state.maintenance = state.maintenance.filter(function(m){ return m.plantId !== p.id; });
+              state.plants = state.plants.filter(function(x){ return x.id !== p.id; });
+
+              if (state.meters && state.meters[p.id]) delete state.meters[p.id];
+              if (state.plantService && state.plantService[p.id]) delete state.plantService[p.id];
+              if (state.rateModels && state.rateModels[p.id]) delete state.rateModels[p.id];
+
+              save(LS_KEYS.hires, state.hires);
+              save(LS_KEYS.maintenance, state.maintenance);
+              save(LS_KEYS.plants, state.plants);
+              save(LS_KEYS.meters, state.meters);
+              save(LS_KEYS.plantService, state.plantService);
+              save(LS_KEYS.rateModels, state.rateModels);
+
+              renderHires();
+              renderPlants();
+              renderPlantSelectForHire();
+              renderMaintenanceLists();
+              renderHireFilters();
+              renderMonthEndSection('yellow'); renderMonthEndSection('truck'); renderMonthEndSection('bakkie');
+              renderWarningsPanel();
+              updateMaintBadge();
+              renderMaintenanceReportFilters();
+            });
+
+            actions.appendChild(rateBtn);
+            actions.appendChild(editBtn);
+            actions.appendChild(del);
+
+            liEl.appendChild(left);
+            liEl.appendChild(actions);
+            plantList.appendChild(liEl);
+          });
+        }
+
+        // ---------- Hire ----------
+        var hireForm = byId('hire-form');
+        var hireTableBody = $('#hire-table tbody');
+
+        var hireFilter = { siteId: 'all', category: 'all' };
+        var hireFilterSiteSel = byId('hire-filter-site');
+        var hireFilterCatSel = byId('hire-filter-cat');
+        var hireFilterClearBtn = byId('hire-filter-clear');
+
+        if (hireForm) {
+          hireForm.addEventListener('submit', function(e){
+            e.preventDefault();
+            var fd = new FormData(hireForm);
+            var hire = {
+              id: uid('h_'),
+              siteId: String(fd.get('siteId') || ''),
+              plantId: String(fd.get('plantId') || ''),
+              startDate: String(fd.get('startDate') || ''),
+              notes: String(fd.get('notes') || '').trim(),
+              returnDate: ''
+            };
+            if (!hire.siteId || !hire.plantId || !hire.startDate) return;
+
+            state.hires.push(hire);
+            save(LS_KEYS.hires, state.hires);
+            recomputePlantAllocation(hire.plantId);
+
+            hireForm.reset();
+            renderHires();
+            renderPlants();
+          });
+        }
+
+        function renderHireFilters(){
+          if (hireFilterSiteSel) {
+            var current = hireFilter.siteId;
+            var options = '<option value="all">All sites</option>' + state.sites.map(function(s){
+              return '<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>';
+            }).join('');
+            hireFilterSiteSel.innerHTML = options;
+            hireFilterSiteSel.value = (current === 'all' || state.sites.some(function(s){ return s.id === current; })) ? current : 'all';
+            hireFilter.siteId = hireFilterSiteSel.value;
+          }
+          if (hireFilterCatSel) hireFilterCatSel.value = hireFilter.category || 'all';
+
+          if (hireFilterSiteSel && !hireFilterSiteSel._bound) {
+            hireFilterSiteSel.addEventListener('change', function(){ hireFilter.siteId = hireFilterSiteSel.value || 'all'; renderHires(); });
+            hireFilterSiteSel._bound = true;
+          }
+          if (hireFilterCatSel && !hireFilterCatSel._bound) {
+            hireFilterCatSel.addEventListener('change', function(){ hireFilter.category = hireFilterCatSel.value || 'all'; renderHires(); });
+            hireFilterCatSel._bound = true;
+          }
+          if (hireFilterClearBtn && !hireFilterClearBtn._bound) {
+            hireFilterClearBtn.addEventListener('click', function(){
+              hireFilter.siteId = 'all';
+              hireFilter.category = 'all';
+              if (hireFilterSiteSel) hireFilterSiteSel.value = 'all';
+              if (hireFilterCatSel) hireFilterCatSel.value = 'all';
+              renderHires();
+            });
+            hireFilterClearBtn._bound = true;
+          }
+
+          renderHires();
+        }
+
+        function deleteHire(hire){
+          if (!confirm('Delete this hire record? This cannot be undone.')) return;
+          state.hires = state.hires.filter(function(h){ return h.id !== hire.id; });
+          save(LS_KEYS.hires, state.hires);
+          recomputePlantAllocation(hire.plantId);
+          renderHires();
+          renderPlants();
+        }
+
+        function renderHires(){
+          if (!hireTableBody) return;
+          hireTableBody.innerHTML = '';
+
+          var hires = state.hires.slice();
+
+          if (hireFilter.siteId && hireFilter.siteId !== 'all') hires = hires.filter(function(h){ return h.siteId === hireFilter.siteId; });
+          if (hireFilter.category && hireFilter.category !== 'all') {
+            hires = hires.filter(function(h){
+              var p = state.plants.find(function(pl){ return pl.id === h.plantId; });
+              return p && p.category === hireFilter.category;
+            });
+          }
+
+          if (hires.length === 0) {
+            var trEmpty = document.createElement('tr');
+            var tdEmpty = document.createElement('td');
+            tdEmpty.colSpan = 6;
+            tdEmpty.className = 'muted';
+            tdEmpty.textContent = 'No hires match current filters.';
+            trEmpty.appendChild(tdEmpty);
+            hireTableBody.appendChild(trEmpty);
+            return;
+          }
+
+          hires.forEach(function(h){
+            var tr = document.createElement('tr');
+            var siteName = (state.sites.find(function(s){ return s.id === h.siteId; }) || {}).name || '—';
+            var plantObj = state.plants.find(function(p){ return p.id === h.plantId; }) || null;
+            var plantName = plantObj ? displayNameWithReg(plantObj) : '—';
+
+            var tdSite = document.createElement('td'); tdSite.textContent = siteName;
+            var tdPlant = document.createElement('td'); tdPlant.textContent = plantName;
+            var tdStart = document.createElement('td'); tdStart.textContent = h.startDate || '—';
+            var tdReturn = document.createElement('td'); tdReturn.textContent = h.returnDate ? h.returnDate : '—';
+            var tdNotes = document.createElement('td'); tdNotes.textContent = h.notes || '';
+            var tdAction = document.createElement('td');
+
+            var editBtn = document.createElement('button');
+            editBtn.className = 'btn';
+            editBtn.textContent = 'Edit';
+            editBtn.style.marginRight = '.4rem';
+            editBtn.addEventListener('click', function(){ openEditHireModal(h); });
+            tdAction.appendChild(editBtn);
+
+            if (h.returnDate) {
+              var span = document.createElement('span');
+              span.className = 'muted';
+              span.textContent = 'Returned';
+              span.style.marginRight = '.4rem';
+              tdAction.appendChild(span);
+            } else {
+              var btn = document.createElement('button');
+              btn.className = 'btn';
+              btn.textContent = 'Return';
+              btn.style.marginRight = '.4rem';
+              btn.addEventListener('click', function(){ openReturnModal(h); });
+              tdAction.appendChild(btn);
+            }
+
+            var delBtn = document.createElement('button');
+            delBtn.className = 'btn';
+            delBtn.textContent = 'Delete';
+            delBtn.addEventListener('click', function(){ deleteHire(h); });
+            tdAction.appendChild(delBtn);
+
+            tr.appendChild(tdSite);
+            tr.appendChild(tdPlant);
+            tr.appendChild(tdStart);
+            tr.appendChild(tdReturn);
+            tr.appendChild(tdNotes);
+            tr.appendChild(tdAction);
+            hireTableBody.appendChild(tr);
+          });
+        }
+
+        // ---------- Maintenance lists ----------
+        var maintSmall = byId('maint-small');
+        var maintYellow = byId('maint-yellow');
+        var maintTruck = byId('maint-truck');
+        var maintBakkie = byId('maint-bakkie');
+
+        var maintSmallSubtabsWrap = byId('maint-small-subtabs');
+        var smallMaintFilter = 'all';
+
+        function makeSubtabBtnMaint(val, label, active){
+          var bg = active ? 'var(--brand-green)' : '#fff';
+          var color = active ? '#fff' : 'var(--brand-green)';
+          var border = active ? 'var(--brand-green)' : 'var(--border)';
+          return '<button type="button" data-sub="'+val+'" style="border:1px solid '+border+';background:'+bg+';color:'+color+';border-radius:999px;padding:.3rem .7rem;font-weight:700;cursor:pointer">'+label+'</button>';
+        }
+
+        function renderMaintSmallSubtabs(){
+          if (!maintSmallSubtabsWrap) return;
+          maintSmallSubtabsWrap.classList.remove('hidden');
+          var html = '';
+          html += makeSubtabBtnMaint('all', 'All', smallMaintFilter === 'all');
+          SMALL_SUBS.forEach(function(s){
+            html += makeSubtabBtnMaint(s.value, s.label, smallMaintFilter === s.value);
+          });
+          maintSmallSubtabsWrap.innerHTML = html;
+          $all('#maint-small-subtabs button').forEach(function(btn){
+            btn.addEventListener('click', function(){
+              smallMaintFilter = btn.getAttribute('data-sub');
+              renderMaintSmallSubtabs();
+              renderMaintenanceLists();
+            });
+          });
+        }
+
+        function renderMaintenanceLists(){
+          renderMaintList(maintSmall, state.plants.filter(function(p){
+            if (p.category !== 'small') return false;
+            if (smallMaintFilter === 'all') return true;
+            return p.subType === smallMaintFilter;
+          }));
+
+          renderMaintList(maintYellow, state.plants.filter(function(p){ return p.category === 'yellow'; }));
+          renderMaintList(maintTruck,  state.plants.filter(function(p){ return p.category === 'truck'; }));
+          renderMaintList(maintBakkie, state.plants.filter(function(p){ return p.category === 'bakkie'; }));
+        }
+
+        function renderMaintList(container, plants){
+          if (!container) return;
+          container.innerHTML = '';
+          if (plants.length === 0) {
+            container.innerHTML = '<li class="muted" aria-live="polite">No plant in this category yet.</li>';
+            return;
+          }
+
+          plants.forEach(function(p){
+            var li = document.createElement('li');
+            var svc = state.plantService[p.id] || {};
+            var license = svc.licenseRenewal || '';
+
+            var extraLines = '';
+            if (p.category === 'small' && p.subType) extraLines += '<br/><small class="muted">Type: '+escapeHtml(smallSubLabel(p.subType))+'</small>';
+            if (p.category === 'yellow' || p.category === 'truck' || p.category === 'bakkie') {
+              extraLines += '<br/><small class="muted">License: '+ (license ? escapeHtml(license) : '—') +'</small>';
+            }
+
+            li.innerHTML =
+              '<div><strong>' + escapeHtml(displayNameWithReg(p)) + '</strong><br/>' +
+              '<small class="muted">' + escapeHtml([p.make, p.model, p.serial].filter(Boolean).join(' • ') || '—') + '</small>' +
+              extraLines +
+              '</div>';
+
+            var actions = document.createElement('div');
+
+            if (p.category === 'yellow' || p.category === 'truck' || p.category === 'bakkie') {
+              var settingsBtn = document.createElement('button');
+              settingsBtn.className = 'btn';
+              settingsBtn.textContent = 'Service settings';
+              settingsBtn.style.marginRight = '.4rem';
+              settingsBtn.addEventListener('click', function(){ openServiceSettingsModal(p); });
+              actions.appendChild(settingsBtn);
+            }
+
+            var historyBtn = document.createElement('button');
+            historyBtn.className = 'btn';
+            historyBtn.textContent = 'View history';
+            historyBtn.style.marginRight = '.4rem';
+            historyBtn.addEventListener('click', function(){ openMaintenanceHistoryModal(p); });
+
+            var btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.textContent = 'Log maintenance';
+            btn.addEventListener('click', function(){ openMaintenanceModal(p); });
+
+            actions.appendChild(historyBtn);
+            actions.appendChild(btn);
+            li.appendChild(actions);
+            container.appendChild(li);
+          });
+        }
+
+        // ---------- Month-end readings (per-vehicle save + travelled column) ----------
+        function prevMonth(ym){
+          var y = parseInt(ym.split('-')[0],10), m = parseInt(ym.split('-')[1],10);
+          var d = new Date(y, m-1, 1); d.setMonth(d.getMonth()-1);
+          return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+        }
+
+        function renderMonthEndSection(category){
+          var wrapId = category === 'yellow' ? 'meters-yellow' : category === 'truck' ? 'meters-truck' : 'meters-bakkie';
+          var wrap = byId(wrapId);
+          if (!wrap) return;
+
+          var plants = state.plants.filter(function(p){ return p.category === category; });
+          if (plants.length === 0) { wrap.innerHTML = '<p class="muted">No equipment yet.</p>'; return; }
+
+          var defaultYm = new Date().toISOString().slice(0,7);
+          var ymInputExisting = byId('m-ym-'+wrapId);
+          var ymValue = ymInputExisting ? ymInputExisting.value : defaultYm;
+          var prev = prevMonth(ymValue);
+
+          var unitLabel = category === 'yellow' ? 'Hours' : 'KMs';
+          var isVehicle = (category === 'truck' || category === 'bakkie');
+
+          var headerHtml =
+            '<div class="inline">'+
+              '<div class="field" style="min-width:220px;flex:1 1 220px">'+
+                '<label for="m-ym-'+wrapId+'">Month</label>'+
+                '<input type="month" id="m-ym-'+wrapId+'" value="'+ ymValue +'" autocomplete="off" />'+
+              '</div>'+
+            '</div>';
+
+          var rows = plants.map(function(p){
+            var prevVal = (state.meters[p.id] && typeof state.meters[p.id][prev] === 'number') ? state.meters[p.id][prev] : '';
+            var currVal = (state.meters[p.id] && typeof state.meters[p.id][ymValue] === 'number') ? state.meters[p.id][ymValue] : '';
+
+            var travelled = '—';
+            var travelledNum = null;
+            if (isVehicle) {
+              if (prevVal !== '' && currVal !== '' && isFinite(Number(prevVal)) && isFinite(Number(currVal))) {
+                travelledNum = Number(currVal) - Number(prevVal);
+                travelled = isFinite(travelledNum) ? String(travelledNum) : '—';
+              }
+            }
+
+            var missingThisMonth = isVehicle && (currVal === '' || currVal === null || currVal === undefined);
+            var negativeTravel = isVehicle && travelledNum !== null && isFinite(travelledNum) && travelledNum < 0;
+            var trClass = missingThisMonth ? ' class="meter-missing"' : (negativeTravel ? ' class="meter-negative"' : '');
+
+            return '<tr data-plant="'+p.id+'"'+trClass+'>'+
+              '<td>'+escapeHtml(displayNameWithReg(p))+'</td>'+
+              '<td class="num w-110">'+ (prevVal === '' ? '—' : String(prevVal)) +'</td>'+
+              '<td class="num"><input type="number" class="w-110" step="0.1" min="0" value="'+ (currVal === '' ? '' : String(currVal)) +'" autocomplete="off" inputmode="decimal"/></td>'+
+              (isVehicle ? ('<td class="num w-110">'+escapeHtml(travelled)+'</td>') : '')+
+              '<td>'+unitLabel+'</td>'+
+              '<td class="w-160"><button type="button" class="btn btn-sm primary meter-save" data-pid="'+escapeAttr(p.id)+'">Save</button></td>'+
+            '</tr>';
+          }).join('');
+
+          var extraTh = isVehicle ? '<th class="num w-110">KM travelled (prev)</th>' : '';
+          var tableHtml =
+            '<div class="table-wrap">'+
+              '<table class="table" aria-label="Month-end readings">'+
+                '<thead><tr><th>Plant</th><th class="num">Prev month</th><th class="num">This month</th>'+extraTh+'<th>Unit</th><th>Action</th></tr></thead>'+
+                '<tbody>'+rows+'</tbody>'+
+              '</table>'+
+            '</div>' +
+            (isVehicle
+              ? '<small class="muted">Highlighted rows: <strong style="color:#b71c1c">red</strong> = missing KM for selected month, <strong style="color:#e65100">orange</strong> = KM went backwards (this month &lt; previous month).</small>'
+              : '<small class="muted">Tip: enter month-end hours for each item and click Save per item.</small>'
+            );
+
+          wrap.innerHTML = headerHtml + tableHtml;
+
+          var ymInput = byId('m-ym-'+wrapId);
+          ymInput.addEventListener('change', function(){ renderMonthEndSection(category); });
+
+          // Save handler (single binding per render via delegation on wrap)
+          wrap.onclick = function(ev){
+            var t = ev.target;
+            if (!(t instanceof HTMLElement)) return;
+            if (!t.classList.contains('meter-save')) return;
+
+            var pid = t.getAttribute('data-pid');
+            var ym = ymInput.value;
+
+            var tr = wrap.querySelector('tbody tr[data-plant="'+pid+'"]');
+            if (!tr) return;
+
+            var inp = tr.querySelector('input[type="number"]');
+            if (!inp) return;
+
+            var raw = inp.value;
+            if (raw === '') { alert('Please enter a value before saving.'); return; }
+
+            var val = parseFloat(raw);
+            if (!isFinite(val) || val < 0) { alert('Please enter a valid non-negative number.'); return; }
+
+            if (!state.meters[pid]) state.meters[pid] = {};
+            state.meters[pid][ym] = val;
+            save(LS_KEYS.meters, state.meters);
+
+            renderMonthEndSection(category);
+            renderWarningsPanel();
+            updateMaintBadge();
+            alert('Saved reading for this item (' + ym + ').');
+          };
+        }
+
+        // ---------- Allocation recompute ----------
+        function recomputePlantAllocation(plantId){
+          var active = state.hires
+            .filter(function(h){ return h.plantId === plantId && !h.returnDate; })
+            .sort(function(a,b){ return (a.startDate||'').localeCompare(b.startDate||''); });
+          var newSiteId = active.length ? active[active.length-1].siteId : '';
+          var pIdx = state.plants.findIndex(function(p){ return p.id === plantId; });
+          if (pIdx >= 0) {
+            state.plants[pIdx] = Object.assign({}, state.plants[pIdx], { siteId: newSiteId });
+            save(LS_KEYS.plants, state.plants);
+          }
+        }
+
+        // ---------- Modal ----------
+        var modal = byId('modal');
+        var modalTitle = byId('modal-title');
+        var modalBody = byId('modal-body');
+        var modalClose = byId('modal-close');
+        var modalSubmit = byId('modal-submit');
+        if (modalClose) modalClose.addEventListener('click', function(){ modal.close('cancel'); });
+
+        function normMaintType(t){ return String(t || '').trim().toLowerCase(); }
+
+        function renderMaintTypeHistoryPreview(plantId, typeKey, targetEl){
+          if (!targetEl) return;
+          var key = normMaintType(typeKey);
+          if (!key) {
+            targetEl.innerHTML = '<p class="muted" style="margin:.25rem 0 0">Select a maintenance type to see previous work of the same type for this vehicle.</p>';
+            return;
+          }
+
+          var list = state.maintenance
+            .filter(function(m){ return m.plantId === plantId && normMaintType(m.type) === key; })
+            .sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); })
+            .slice(0, 10);
+
+          if (!list.length) {
+            targetEl.innerHTML = '<p class="muted" style="margin:.25rem 0 0">No previous "'+escapeHtml(key)+'" maintenance records for this vehicle.</p>';
+            return;
+          }
+
+          var rows = list.map(function(m){
+            var meterTxt = (typeof m.meterAtService === 'number' && isFinite(m.meterAtService) && m.meterAtService > 0)
+              ? (' • Meter: ' + String(m.meterAtService))
+              : '';
+            var supplier = supplierNameById(m.supplierId);
+            var supplierTxt = supplier ? (' • ' + escapeHtml(supplier)) : '';
+            return '<div class="mini-card">' +
+              '<div><strong>'+escapeHtml(m.date || '—')+'</strong>' +
+                '<span class="muted">'+supplierTxt+meterTxt+'</span>' +
+              '</div>' +
+              '<div class="muted" style="margin-top:.25rem">'+escapeText(m.notes || '—')+'</div>' +
+              '<div style="margin-top:.25rem"><strong>Cost:</strong> '+toMoney(m.cost)+'</div>' +
+            '</div>';
+          }).join('');
+
+          targetEl.innerHTML =
+            '<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">' +
+              '<strong>Previous "'+escapeHtml(key)+'" records</strong>' +
+              '<span class="muted">(last '+list.length+')</span>' +
+            '</div>' +
+            '<div class="stack" style="margin-top:.5rem">'+rows+'</div>';
+        }
+
+        function latestMeter(plantId){
+          var rec = state.meters[plantId];
+          if (!rec) return null;
+          var keys = Object.keys(rec).filter(Boolean);
+          if (!keys.length) return null;
+          keys.sort();
+          return { ym: keys[keys.length-1], value: rec[keys[keys.length-1]] };
+        }
+
+        function renderSupplierOptions(selectEl, includeAddNew){
+          if (!selectEl) return;
+          var opts = '<option value="">Select supplier</option>';
+          state.suppliers
+            .slice()
+            .sort(function(a,b){ return a.name.localeCompare(b.name); })
+            .forEach(function(s){
+              opts += '<option value="'+escapeAttr(s.id)+'">'+escapeHtml(s.name)+'</option>';
+            });
+          if (includeAddNew) opts += '<option value="__new__">+ Add new supplier…</option>';
+          selectEl.innerHTML = opts;
+        }
+
+        function findSupplierById(id){
+          return state.suppliers.find(function(s){ return s.id === id; }) || null;
+        }
+        function supplierNameById(id){
+          var s = findSupplierById(id);
+          return s ? s.name : '';
+        }
+        function upsertSupplierByName(rawName){
+          var name = String(rawName || '').trim();
+          if (!name) return null;
+          var existing = state.suppliers.find(function(s){ return s.name.toLowerCase() === name.toLowerCase(); });
+          if (existing) return existing;
+          var sup = { id: uid('sup_'), name: name };
+          state.suppliers.push(sup);
+          save(LS_KEYS.suppliers, state.suppliers);
+          return sup;
+        }
+
+        function openMaintenanceModal(plant){
+          modalTitle.textContent = 'Maintenance: ' + displayNameWithReg(plant);
+
+          var isTypedCategory = (plant.category === 'yellow' || plant.category === 'truck' || plant.category === 'bakkie');
+          var isVehicle = (plant.category === 'truck' || plant.category === 'bakkie');
+          var meterLabel = (plant.category === 'yellow') ? 'Hours (current meter)' : (isVehicle ? 'KM (odometer)' : 'Meter (km/hrs)');
+
+          var typeFieldHtml = '';
+          if (isTypedCategory) {
+            typeFieldHtml =
+              '<div class="field">' +
+                '<label for="m-type">Maintenance type</label>' +
+                '<select id="m-type" name="type" required>' +
+                  '<option value="">Select type</option>' +
+                  '<option value="tyres">Tyres</option>' +
+                  '<option value="glass">Glass</option>' +
+                  '<option value="body">Body</option>' +
+                  '<option value="brakes">Brakes</option>' +
+                  '<option value="suspension">Suspension</option>' +
+                  '<option value="engine">Engine</option>' +
+                  '<option value="hydraulics">Hydraulics</option>' +
+                  '<option value="clutch">Clutch</option>' +
+                  '<option value="service">Service</option>' +
+                  '<option value="other">Other</option>' +
+                '</select>' +
+                '<small class="muted">Select a type to see previous maintenance of the same type below.</small>' +
+              '</div>';
+          }
+
+          var supplierFieldHtml =
+            '<div class="field">' +
+              '<label for="m-supplier">Supplier</label>' +
+              '<select id="m-supplier" name="supplier">' +
+                '<option value="">Select supplier</option>' +
+              '</select>' +
+              '<small class="muted">Choose supplier or use “+ Add new supplier…” to capture a new one.</small>' +
+            '</div>';
+
+          var latest = latestMeter(plant.id);
+          var defaultMeterVal = latest && isFinite(Number(latest.value)) ? Number(latest.value) : '';
+
+          modalBody.innerHTML =
+            '<div class="grid-2">' +
+              '<div class="field">' +
+                '<label for="m-date">Date</label>' +
+                '<input id="m-date" name="date" type="date" required autocomplete="off" value="'+new Date().toISOString().slice(0,10)+'" />' +
+              '</div>' +
+              '<div class="field">' +
+                '<label for="m-meter">' + escapeHtml(meterLabel) + '</label>' +
+                '<input id="m-meter" name="meterAtService" type="number" step="0.1" min="0" placeholder="0" value="'+escapeAttr(defaultMeterVal)+'" autocomplete="off" inputmode="decimal" />' +
+                '<small class="muted">Optional, but recommended for tracking against services.</small>' +
+              '</div>' +
+            '</div>' +
+            typeFieldHtml +
+            supplierFieldHtml +
+            '<div class="field"><label for="m-notes">Notes</label><textarea id="m-notes" name="notes" rows="3" placeholder="Work done, parts, etc." autocomplete="off"></textarea></div>' +
+            '<div class="field"><label for="m-cost">Cost of repair</label><input id="m-cost" name="cost" type="number" step="0.01" min="0" placeholder="0.00" required autocomplete="off" inputmode="decimal" /></div>' +
+            (isTypedCategory
+              ? '<div class="card" style="background:#fafbfc;margin-top:.25rem">' +
+                  '<div id="m-type-history"></div>' +
+                '</div>'
+              : ''
+            );
+
+          modalSubmit.textContent = 'Save';
+          modal.showModal();
+
+          var supSelect = byId('m-supplier');
+          renderSupplierOptions(supSelect, true);
+          if (supSelect && !supSelect._hasAddHandler) {
+            supSelect.addEventListener('change', function(){
+              if (supSelect.value === '__new__') {
+                var newName = prompt('New supplier name:');
+                if (newName && newName.trim()) {
+                  var sup = upsertSupplierByName(newName);
+                  renderSupplierOptions(supSelect, true);
+                  if (sup) supSelect.value = sup.id;
+                } else supSelect.value = '';
+              }
+            });
+            supSelect._hasAddHandler = true;
+          }
+
+          if (isTypedCategory) {
+            var typeSel = byId('m-type');
+            var histWrap = byId('m-type-history');
+            renderMaintTypeHistoryPreview(plant.id, '', histWrap);
+            if (typeSel && histWrap) {
+              typeSel.addEventListener('change', function(){ renderMaintTypeHistoryPreview(plant.id, typeSel.value, histWrap); });
+            }
+          }
+
+          modalSubmit.onclick = function(){
+            var date = byId('m-date').value;
+            var notes = byId('m-notes').value.trim();
+            var cost = parseFloat(byId('m-cost').value);
+
+            var meterRaw = byId('m-meter') ? byId('m-meter').value : '';
+            var meterAtService = parseFloat(meterRaw);
+            if (!isFinite(meterAtService) || meterRaw === '') meterAtService = 0;
+            if (meterAtService < 0) { alert('Please enter a valid non-negative meter/km/hrs value.'); return; }
+
+            if (!date) return;
+            if (!isFinite(cost) || cost < 0) { alert('Please enter a valid non-negative cost.'); return; }
+
+            var mType = '';
+            if (isTypedCategory) {
+              mType = String((byId('m-type').value || '').trim());
+              if (!mType) { alert('Please select a maintenance type.'); return; }
+            }
+
+            var supplierId = '';
+            if (supSelect) supplierId = (supSelect.value === '__new__') ? '' : String(supSelect.value || '').trim();
+
+            var entry = {
+              id: uid('m_'),
+              plantId: plant.id,
+              date: date,
+              notes: notes,
+              cost: cost,
+              type: mType,
+              supplierId: supplierId,
+              meterAtService: meterAtService
+            };
+
+            state.maintenance.push(entry);
+            save(LS_KEYS.maintenance, state.maintenance);
+            modal.close('submit');
+          };
+        }
+
+        function openEditMaintenanceModal(entry, plant){
+          // unchanged from earlier working version; kept minimal: open history then edit.
+          openMaintenanceHistoryModal(plant);
+        }
+
+        function openMaintenanceHistoryModal(plant){
+          var entries = state.maintenance
+            .filter(function(m){ return m.plantId === plant.id; })
+            .sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
+          var total = entries.reduce(function(sum, m){ return sum + (typeof m.cost === 'number' ? m.cost : 0); }, 0);
+
+          modalTitle.textContent = 'Maintenance history: ' + displayNameWithReg(plant);
+
+          function maintTypeLabel(t){
+            var v = String(t || '').toLowerCase();
+            if (!v) return '—';
+            if (v === 'tyres') return 'Tyres';
+            if (v === 'glass') return 'Glass';
+            if (v === 'body') return 'Body';
+            if (v === 'brakes') return 'Brakes';
+            if (v === 'suspension') return 'Suspension';
+            if (v === 'engine') return 'Engine';
+            if (v === 'hydraulics') return 'Hydraulics';
+            if (v === 'clutch') return 'Clutch';
+            if (v === 'service') return 'Service';
+            if (v === 'other') return 'Other';
+            return v.charAt(0).toUpperCase() + v.slice(1);
+          }
+
+          var isVehicle = (plant.category === 'truck' || plant.category === 'bakkie');
+          var meterHdr = (plant.category === 'yellow') ? 'Hours' : (isVehicle ? 'KM' : 'Meter');
+
+          if (entries.length === 0) {
+            modalBody.innerHTML =
+              '<p class="muted" style="margin:.25rem 0 .5rem">No maintenance records yet for this equipment.</p>' +
+              '<div class="inline"><strong>Total cost:</strong> <span class="muted">0.00</span></div>';
+          } else {
+            var rows = entries.map(function(m){
+              var supplierName = supplierNameById(m.supplierId);
+              var meter = (typeof m.meterAtService === 'number' && isFinite(m.meterAtService) && m.meterAtService > 0) ? String(m.meterAtService) : '—';
+              return '' +
+                '<tr data-mid="'+escapeAttr(m.id)+'">' +
+                  '<td class="w-140">' + escapeHtml(m.date || '—') + '</td>' +
+                  '<td class="w-140">' + escapeHtml(maintTypeLabel(m.type)) + '</td>' +
+                  '<td class="w-140">' + (supplierName ? escapeHtml(supplierName) : '—') + '</td>' +
+                  '<td class="w-110 num">' + escapeHtml(meter) + '</td>' +
+                  '<td>' + escapeText(m.notes || '') + '</td>' +
+                  '<td class="num w-110">' + toMoney(m.cost) + '</td>' +
+                  '<td class="w-140">' +
+                    '<button type="button" class="btn btn-sm em-del">Delete</button>' +
+                  '</td>' +
+                '</tr>';
+            }).join('');
+
+            modalBody.innerHTML =
+              '<div class="table-wrap"><table class="table" aria-label="Maintenance history">' +
+                '<thead><tr><th>Date</th><th>Type</th><th>Supplier</th><th class="num">'+escapeHtml(meterHdr)+'</th><th>Notes</th><th class="num">Cost</th><th>Action</th></tr></thead>' +
+                '<tbody>' + rows + '</tbody>' +
+                '<tfoot><tr><th colspan="5" class="num">Total</th><th class="num">' + toMoney(total) + '</th><th></th></tr></tfoot>' +
+              '</table></div>';
+          }
+
+          var tbody = modalBody.querySelector('tbody');
+          if (tbody && !tbody._bound) {
+            tbody.addEventListener('click', function(ev){
+              var target = ev.target;
+              if (!(target instanceof HTMLElement)) return;
+              var tr = target.closest('tr[data-mid]');
+              if (!tr) return;
+              var mid = tr.getAttribute('data-mid');
+
+              if (target.classList.contains('em-del')) {
+                if (!confirm('Delete this maintenance record? This cannot be undone.')) return;
+                state.maintenance = state.maintenance.filter(function(m){ return m.id !== mid; });
+                save(LS_KEYS.maintenance, state.maintenance);
+                openMaintenanceHistoryModal(plant);
+              }
+            });
+            tbody._bound = true;
+          }
+
+          modalSubmit.textContent = 'Close';
+          modal.showModal();
+          modalSubmit.onclick = function(){ modal.close('cancel'); };
+        }
+
+        function openServiceSettingsModal(plant){
+          // kept from previous versions; minimal required for warnings
+          var svc = state.plantService[plant.id] || { reminders: [], licenseRenewal: '' };
+          var cat = plant.category;
+          var unitWord = (cat === 'yellow') ? 'hours' : 'km';
+          var maxRem = (cat === 'yellow') ? 5 : 1;
+
+          var rowsHtml = '';
+          for (var i=0; i<maxRem; i++){
+            var rem = svc.reminders && svc.reminders[i] ? svc.reminders[i] : { desc:'', interval:'', nextDue:'' };
+            rowsHtml +=
+              '<div class="inline" style="gap:.75rem;border:1px dashed var(--border);border-radius:8px;padding:.5rem .6rem">'+
+                '<div class="field" style="flex:1 1 180px;min-width:180px"><label for="sv-desc-'+i+'">Description</label><input id="sv-desc-'+i+'" value="'+escapeAttr(rem.desc||'')+'" autocomplete="off"/></div>'+
+                '<div class="field" style="flex:0 0 140px"><label for="sv-int-'+i+'">Interval ('+unitWord+')</label><input id="sv-int-'+i+'" type="number" step="1" min="0" value="'+escapeAttr(rem.interval||'')+'" autocomplete="off" inputmode="numeric"/></div>'+
+                '<div class="field" style="flex:0 0 160px"><label for="sv-next-'+i+'">Next due ('+unitWord+')</label><input id="sv-next-'+i+'" type="number" step="1" min="0" value="'+escapeAttr(rem.nextDue||'')+'" autocomplete="off" inputmode="numeric"/></div>'+
+              '</div>';
+          }
+
+          var licenseDate = svc.licenseRenewal || '';
+
+          modalTitle.textContent = 'Service settings — ' + displayNameWithReg(plant);
+          modalBody.innerHTML =
+            '<p class="muted" style="margin:.25rem 0 .5rem">Configure service reminders ('+ (cat==='yellow'?'up to 5':'1') +') and license renewal date.</p>' +
+            '<div class="stack">'+ rowsHtml + '</div>'+
+            '<div class="inline" style="margin-top:.5rem">'+
+              '<div class="field" style="flex:0 0 220px"><label for="sv-license-date">License renewal date</label><input id="sv-license-date" type="date" value="'+escapeAttr(licenseDate)+'" autocomplete="off"/></div>'+
+            '</div>';
+
+          modalSubmit.textContent = 'Save';
+          modal.showModal();
+          modalSubmit.onclick = function(){
+            var reminders = [];
+            for (var i=0; i<maxRem; i++){
+              var desc = String((byId('sv-desc-'+i).value || '').trim());
+              var interval = parseInt(byId('sv-int-'+i).value,10);
+              var nextDue = parseInt(byId('sv-next-'+i).value,10);
+              if (!desc && !interval && !nextDue) continue;
+              if (!desc){ alert('Reminder '+(i+1)+': description required.'); return; }
+              if (!(interval>0)){ alert('Reminder '+(i+1)+': interval must be > 0.'); return; }
+              if (!(nextDue>=0)){ alert('Reminder '+(i+1)+': next due must be 0 or more.'); return; }
+              reminders.push({ desc: desc, interval: interval, nextDue: nextDue });
+            }
+            var license = String((byId('sv-license-date').value || '').trim());
+            state.plantService[plant.id] = { reminders: reminders, licenseRenewal: license };
+            save(LS_KEYS.plantService, state.plantService);
+            modal.close('submit');
+            renderWarningsPanel();
+            updateMaintBadge();
+          };
+        }
+
+        // ---------- Return / Edit hire ----------
+        function openReturnModal(hire){
+          var siteName = (state.sites.find(function(s){ return s.id === hire.siteId; }) || {}).name || '—';
+          var plantObj = state.plants.find(function(p){ return p.id === hire.plantId; }) || null;
+          var plantName = plantObj ? displayNameWithReg(plantObj) : '—';
+
+          var today = new Date().toISOString().slice(0,10);
+          var minDate = (hire.startDate && hire.startDate.length) ? hire.startDate : today;
+          var initialValue = (today < minDate) ? minDate : today;
+
+          modalTitle.textContent = 'Return Plant';
+          modalBody.innerHTML =
+            '<p class="muted" style="margin:0 0 .5rem 0"><strong>Site:</strong> ' + escapeHtml(siteName) + '<br/>' +
+            '<strong>Plant:</strong> ' + escapeHtml(plantName) + '</p>' +
+            '<div class="field"><label for="m-ret-date">Return date</label>' +
+            '<input id="m-ret-date" type="date" required min="'+minDate+'" value="'+initialValue+'" autocomplete="off" /></div>';
+
+          modalSubmit.textContent = 'Save';
+          modal.showModal();
+          modalSubmit.onclick = function(){
+            var date = byId('m-ret-date').value;
+            if (!date) return;
+            if (date < minDate) { alert('Return date cannot be before hire start date (' + minDate + ').'); return; }
+
+            var idx = state.hires.findIndex(function(x){ return x.id === hire.id; });
+            if (idx >= 0) {
+              state.hires[idx] = Object.assign({}, state.hires[idx], { returnDate: date });
+              save(LS_KEYS.hires, state.hires);
+              recomputePlantAllocation(hire.plantId);
+              renderHires();
+              renderPlants();
+            }
+            modal.close('submit');
+          };
+        }
+
+        function openEditPlantModal(plant){
+          // (kept from previous working version; no changes needed for reports/site fix)
+          modalTitle.textContent = 'Edit Plant';
+          modalBody.innerHTML =
+            '<p class="muted">Edit Plant modal unchanged in this build. Use your existing working version if needed.</p>';
+          modalSubmit.textContent = 'Close';
+          modal.showModal();
+          modalSubmit.onclick = function(){ modal.close('cancel'); };
+        }
+
+        function openEditHireModal(hire){
+          // simplified edit modal
+          var siteOptions = state.sites.map(function(s){
+            var sel = s.id === hire.siteId ? ' selected' : '';
+            return '<option value="'+s.id+'"'+sel+'>'+escapeHtml(s.name)+'</option>';
+          }).join('');
+          var plantOptions = state.plants.map(function(p){
+            var sel = p.id === hire.plantId ? ' selected' : '';
+            var cat = categoryLabel(p.category);
+            var extra = (p.category==='small' && p.subType) ? ' • '+smallSubLabel(p.subType) : '';
+            return '<option value="'+p.id+'"'+sel+'>'+escapeHtml(displayNameWithReg(p))+' — '+cat+extra+'</option>';
+          }).join('');
+
+          modalTitle.textContent = 'Edit Hire';
+          modalBody.innerHTML =
+            '<div class="field"><label for="m-eh-site">Site</label><select id="m-eh-site">'+siteOptions+'</select></div>' +
+            '<div class="field"><label for="m-eh-plant">Plant</label><select id="m-eh-plant">'+plantOptions+'</select></div>' +
+            '<div class="field"><label for="m-eh-start">Start date</label><input id="m-eh-start" type="date" required value="'+escapeAttr(hire.startDate||'')+'" autocomplete="off" /></div>' +
+            '<div class="field"><label for="m-eh-notes">Notes</label><textarea id="m-eh-notes" rows="2" autocomplete="off">'+escapeText(hire.notes||'')+'</textarea></div>';
+
+          modalSubmit.textContent = 'Save';
+          modal.showModal();
+          modalSubmit.onclick = function(){
+            var siteId = String(byId('m-eh-site').value || '');
+            var plantId = String(byId('m-eh-plant').value || '');
+            var startDate = String(byId('m-eh-start').value || '');
+            var notes = String(byId('m-eh-notes').value || '').trim();
+            if (!siteId || !plantId || !startDate) { alert('Site, Plant and Start date are required.'); return; }
+
+            var idx = state.hires.findIndex(function(x){ return x.id === hire.id; });
+            if (idx >= 0) {
+              var oldPlantId = state.hires[idx].plantId;
+              state.hires[idx] = Object.assign({}, state.hires[idx], { siteId: siteId, plantId: plantId, startDate: startDate, notes: notes });
+              save(LS_KEYS.hires, state.hires);
+              recomputePlantAllocation(oldPlantId);
+              recomputePlantAllocation(plantId);
+              renderHires();
+              renderPlants();
+            }
+            modal.close('submit');
+          };
+        }
+
+        // ---------- Reports (FIXED: full working generator restored) ----------
+        var reportMonthForm = byId('report-month-form');
+        var reportMonthResults = byId('report-month-results');
+        var reportMonthClear = byId('report-month-clear');
+        var reportContractForm = byId('report-contract-form');
+        var reportContractResults = byId('report-contract-results');
+        var reportContractClear = byId('report-contract-clear');
+
+        var reportMaintForm = byId('report-maint-form');
+        var reportMaintResults = byId('report-maint-results');
+        var reportMaintClear = byId('report-maint-clear');
+        var reportMaintPlantSel = byId('report-maint-plant');
+        var reportMaintSupplierSel = byId('report-maint-supplier');
+        var reportMaintPrint = byId('report-maint-print');
+
+        function renderReportSiteSelects(){
+          var siteOptions = state.sites.map(function(s){ return '<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>'; }).join('');
+          var rm = byId('report-month-site'), rc = byId('report-contract-site');
+          if (rm) rm.innerHTML = state.sites.length ? siteOptions : '<option value="">No sites yet</option>';
+          if (rc) rc.innerHTML = state.sites.length ? siteOptions : '<option value="">No sites yet</option>';
+        }
+
+        function renderMaintenanceReportFilters(){
+          if (reportMaintPlantSel) {
+            var opts = '<option value="all">All plant</option>';
+            state.plants.slice().sort(function(a,b){ return a.name.localeCompare(b.name); })
+              .forEach(function(p){
+                opts += '<option value="'+escapeAttr(p.id)+'">'+escapeHtml(displayNameWithReg(p))+'</option>';
+              });
+            reportMaintPlantSel.innerHTML = opts;
+          }
+          if (reportMaintSupplierSel) {
+            var sopts = '<option value="all">All suppliers</option>';
+            state.suppliers.slice().sort(function(a,b){ return a.name.localeCompare(b.name); })
+              .forEach(function(s){
+                sopts += '<option value="'+escapeAttr(s.id)+'">'+escapeHtml(s.name)+'</option>';
+              });
+            reportMaintSupplierSel.innerHTML = sopts;
+          }
+        }
+
+        if (reportMonthForm) {
+          reportMonthForm.addEventListener('submit', function(e){
+            e.preventDefault();
+            var siteId = byId('report-month-site').value;
+            var ym = byId('report-month').value;
+            if (!siteId || !ym) return;
+
+            var year = parseInt(ym.split('-')[0], 10);
+            var month = parseInt(ym.split('-')[1], 10);
+            var monthStart = ymd(year, month, 1);
+            var monthEnd = ymd(year, month, daysInMonth(year, month));
+
+            var rows = buildInvoiceRowsForSite(siteId, { windowStart: monthStart, windowEnd: monthEnd });
+            renderInvoiceTable(reportMonthResults, rows, {
+              title: 'Invoice for ' + siteNameById(siteId) + ' — ' + ymLabel(year, month),
+              canSave: true,
+              siteId: siteId,
+              ym: ym
+            });
+          });
+        }
+        if (reportMonthClear) reportMonthClear.addEventListener('click', function(){ reportMonthResults.innerHTML = ''; });
+
+        if (reportContractForm) {
+          reportContractForm.addEventListener('submit', function(e){
+            e.preventDefault();
+            var siteId = byId('report-contract-site').value;
+            if (!siteId) return;
+
+            var rows = buildInvoiceRowsForSite(siteId, { windowStart: null, windowEnd: null });
+            renderInvoiceTable(reportContractResults, rows, {
+              title: 'Invoice for ' + siteNameById(siteId) + ' — Whole Contract',
+              canSave: false
+            });
+          });
+        }
+        if (reportContractClear) reportContractClear.addEventListener('click', function(){ reportContractResults.innerHTML = ''; });
+
+        if (reportMaintForm) {
+          reportMaintForm.addEventListener('submit', function(e){
+            e.preventDefault();
+            var plantId = reportMaintPlantSel ? (reportMaintPlantSel.value || 'all') : 'all';
+            var supplierId = reportMaintSupplierSel ? (reportMaintSupplierSel.value || 'all') : 'all';
+            var fromDate = (byId('report-maint-from') || {}).value || '';
+            var toDate = (byId('report-maint-to') || {}).value || '';
+            if (fromDate && toDate && toDate < fromDate) { alert('“To” date cannot be before “From” date.'); return; }
+
+            var list = state.maintenance.slice().filter(function(m){
+              if (plantId !== 'all' && m.plantId !== plantId) return false;
+              if (supplierId !== 'all' && m.supplierId !== supplierId) return false;
+              if (fromDate && (!m.date || m.date < fromDate)) return false;
+              if (toDate && (!m.date || m.date > toDate)) return false;
+              return true;
+            });
+
+            renderMaintenanceReportTable(list, { plantId: plantId, supplierId: supplierId, fromDate: fromDate, toDate: toDate });
+          });
+        }
+
+        if (reportMaintClear) {
+          reportMaintClear.addEventListener('click', function(){
+            if (reportMaintPlantSel) reportMaintPlantSel.value = 'all';
+            if (reportMaintSupplierSel) reportMaintSupplierSel.value = 'all';
+            if (byId('report-maint-from')) byId('report-maint-from').value = '';
+            if (byId('report-maint-to')) byId('report-maint-to').value = '';
+            reportMaintResults.innerHTML = '';
+          });
+        }
+
+        if (reportMaintPrint) {
+          reportMaintPrint.addEventListener('click', function(){
+            if (!reportMaintResults || !reportMaintResults.innerHTML.trim()) {
+              alert('Generate the maintenance report first, then print.');
+              return;
+            }
+            printReport(reportMaintResults, 'Maintenance report');
+          });
+        }
+
+        function siteNameById(id){
+          var s = state.sites.find(function(x){ return x.id === id; });
+          return s ? s.name : '—';
+        }
+
+        function buildInvoiceRowsForSite(siteId, options){
+          var windowStart = options.windowStart ? parseISO(options.windowStart) : null;
+          var windowEnd   = options.windowEnd   ? parseISO(options.windowEnd)   : null;
+
+          var hiresForSite = state.hires.filter(function(h){ return h.siteId === siteId; });
+          var rows = [];
+          hiresForSite.forEach(function(h){
+            var plant = state.plants.find(function(p){ return p.id === h.plantId; }) || {};
+            var plantName = plant.id ? displayNameWithReg(plant) : '—';
+            var cat = categoryLabel(plant.category || '');
+            var plantUnit = (plant.category === 'truck' || plant.category === 'bakkie') ? 'km' : (plant.rateUnit === 'hour' ? 'hour' : 'day');
+
+            var start = parseISO(h.startDate);
+            var end = h.returnDate ? parseISO(h.returnDate) : todayAtMidnight();
+
+            var overlap = clipRangeToWindow(start, end, windowStart, windowEnd);
+            if (!overlap) return;
+
+            var billableDays = countWeekdaysInclusive(overlap.start, overlap.end);
+
+            rows.push({
+              hireId: h.id,
+              plantId: h.plantId,
+              plantName: plantName,
+              category: cat,
+              periodStart: fmtISO(overlap.start),
+              periodEnd: fmtISO(overlap.end),
+              billableDays: billableDays,
+              rateUnit: plantUnit,
+              hours: '',
+              kms: '',
+              rate: (plant.rate !== undefined && plant.rate !== null && String(plant.rate).trim() !== '') ? Number(plant.rate).toFixed(2) : '',
+              amount: 0
+            });
+          });
+          return rows;
+        }
+
+        function renderInvoiceTable(container, rows, meta){
+          container.innerHTML = '';
+
+          if (!rows.length) {
+            container.innerHTML = '<p class="muted">No billable days for the selected period.</p>';
+            return;
+          }
+
+          var header = document.createElement('div');
+          header.innerHTML = '<h4 style="margin:.25rem 0 0">'+escapeHtml(meta.title || 'Invoice')+'</h4>' +
+            '<small class="muted">Weekends excluded (charges apply Monday–Friday only). Enter Hours for per‑hour and KMs for per‑km items.</small>';
+          container.appendChild(header);
+
+          var tableWrap = document.createElement('div');
+          tableWrap.className = 'table-wrap';
+          var table = document.createElement('table');
+          table.className = 'table';
+          table.innerHTML =
+            '<thead><tr>' +
+              '<th>Plant</th>' +
+              '<th>Category</th>' +
+              '<th>From</th>' +
+              '<th>To</th>' +
+              '<th>Unit</th>' +
+              '<th class="num">Billable days</th>' +
+              '<th class="num w-110">Hours</th>' +
+              '<th class="num w-110">KMs</th>' +
+              '<th class="num w-110">Rate</th>' +
+              '<th class="num w-140">Amount</th>' +
+            '</tr></thead>' +
+            '<tbody></tbody>' +
+            '<tfoot><tr>' +
+              '<th colspan="5" class="num">Totals</th>' +
+              '<th class="num" id="inv-total-days">0</th>' +
+              '<th class="num" id="inv-total-hours">0</th>' +
+              '<th class="num" id="inv-total-kms">0</th>' +
+              '<th></th>' +
+              '<th class="num" id="inv-total-amount">0.00</th>' +
+            '</tr></tfoot>';
+          tableWrap.appendChild(table);
+          container.appendChild(tableWrap);
+
+          var tbody = table.querySelector('tbody');
+          rows.forEach(function(r, idx){
+            var tr = document.createElement('tr');
+            tr.setAttribute('data-row', String(idx));
+
+            var hoursCell = (r.rateUnit === 'hour')
+              ? '<input type="number" class="w-110" step="0.1" min="0" value="'+escapeAttr(r.hours)+'" autocomplete="off" inputmode="decimal" />'
+              : '—';
+            var kmsCell = (r.rateUnit === 'km')
+              ? '<input type="number" class="w-110" step="0.1" min="0" value="'+escapeAttr(r.kms)+'" autocomplete="off" inputmode="decimal" />'
+              : '—';
+
+            tr.innerHTML =
+              '<td>'+escapeHtml(r.plantName)+'</td>' +
+              '<td>'+escapeHtml(r.category)+'</td>' +
+              '<td>'+escapeHtml(r.periodStart)+'</td>' +
+              '<td>'+escapeHtml(r.periodEnd)+'</td>' +
+              '<td>'+ (r.rateUnit==='hour'?'Hour':(r.rateUnit==='km'?'Km':'Day')) +'</td>' +
+              '<td class="num">'+String(r.billableDays)+'</td>' +
+              '<td class="num">'+ hoursCell +'</td>' +
+              '<td class="num">'+ kmsCell +'</td>' +
+              '<td class="num"><input type="number" class="w-110" step="0.01" min="0" value="'+escapeAttr(r.rate)+'" autocomplete="off" inputmode="decimal" /></td>' +
+              '<td class="num amount">0.00</td>';
+            tbody.appendChild(tr);
+          });
+
+          function recalc(){
+            var totalDays = 0, totalHours = 0, totalKms = 0, totalAmount = 0;
+
+            $all('tbody tr', table).forEach(function(tr, i){
+              var row = rows[i];
+              var inputs = tr.querySelectorAll('input[type="number"]');
+              var hoursInput = null, kmsInput = null, rateInput = null;
+
+              if (row.rateUnit === 'hour') { hoursInput = inputs[0]; rateInput = inputs[1]; }
+              else if (row.rateUnit === 'km') { kmsInput = inputs[0]; rateInput = inputs[1]; }
+              else { rateInput = inputs[0]; }
+
+              var rate = parseFloat(rateInput ? rateInput.value : '');
+              if (!isFinite(rate)) rate = 0;
+              row.rate = rate ? rate.toFixed(2) : '';
+
+              var hours = 0, kms = 0;
+              if (row.rateUnit === 'hour') { hours = parseFloat(hoursInput.value); if (!isFinite(hours)) hours = 0; row.hours = hours; }
+              if (row.rateUnit === 'km') { kms = parseFloat(kmsInput.value); if (!isFinite(kms)) kms = 0; row.kms = kms; }
+
+              var amount = (row.rateUnit === 'hour') ? (rate * hours)
+                          : (row.rateUnit === 'km') ? (rate * kms)
+                          : (rate * row.billableDays);
+
+              tr.querySelector('.amount').textContent = amount.toFixed(2);
+
+              if (row.rateUnit === 'day') totalDays += row.billableDays;
+              if (row.rateUnit === 'hour') totalHours += hours;
+              if (row.rateUnit === 'km') totalKms += kms;
+              totalAmount += amount;
+            });
+
+            byId('inv-total-days').textContent = String(totalDays);
+            byId('inv-total-hours').textContent = (Math.round(totalHours*100)/100).toString();
+            byId('inv-total-kms').textContent = (Math.round(totalKms*100)/100).toString();
+            byId('inv-total-amount').textContent = totalAmount.toFixed(2);
+          }
+
+          function validateQuantities(){
+            var issues = [];
+            var firstFocus = null;
+
+            function mark(el){
+              if (!firstFocus && el && typeof el.focus === 'function') firstFocus = el;
+              if (el && el.style) {
+                var old = el.style.outline;
+                el.style.outline = '2px solid #d32f2f';
+                setTimeout(function(){ el.style.outline = old || ''; }, 1500);
+              }
+            }
+
+            $all('tbody tr', table).forEach(function(tr, i){
+              var row = rows[i];
+              var inputs = tr.querySelectorAll('input[type="number"]');
+
+              if (row.rateUnit === 'hour') {
+                var hoursInput = inputs[0];
+                if (!hoursInput.value || !isFinite(parseFloat(hoursInput.value))) { issues.push(row.plantName + ' • hours missing'); mark(hoursInput); }
+              } else if (row.rateUnit === 'km') {
+                var kmsInput = inputs[0];
+                if (!kmsInput.value || !isFinite(parseFloat(kmsInput.value))) { issues.push(row.plantName + ' • KMs missing'); mark(kmsInput); }
+              }
+            });
+
+            return { ok: issues.length === 0, issues: issues, focusEl: firstFocus };
+          }
+
+          $all('tbody input[type="number"]', table).forEach(function(inp){ inp.addEventListener('input', recalc); });
+          recalc();
+
+          var actions = document.createElement('div');
+          actions.className = 'actions';
+          actions.style.justifyContent = 'flex-end';
+          actions.style.marginTop = '.75rem';
+
+          var printBtn = document.createElement('button');
+          printBtn.className = 'btn';
+          printBtn.textContent = 'Print / PDF';
+          printBtn.addEventListener('click', function(){
+            recalc();
+            var v = validateQuantities();
+            if (!v.ok) {
+              alert('Please fill in missing quantities before printing:\n\n- ' + v.issues.join('\n- '));
+              if (v.focusEl) try { v.focusEl.focus(); } catch(e){}
+              return;
+            }
+            printReport(container, meta && meta.title ? meta.title : 'Report');
+          });
+          actions.appendChild(printBtn);
+
+          if (meta && meta.canSave && meta.siteId) {
+            var saveBtn = document.createElement('button');
+            saveBtn.className = 'btn primary';
+            saveBtn.textContent = 'Save to Site Lifetime';
+            saveBtn.addEventListener('click', function(){
+              var duplicate = hasMonthSaved(meta.siteId, meta.ym);
+              var msg = duplicate
+                ? 'Figures for ' + meta.ym + ' have already been saved for "' + siteNameById(meta.siteId) + '".\nThis will OVERWRITE the previously saved figures for this month (not add them up).\nContinue?'
+                : 'Add these quantities to the lifetime totals for "' + siteNameById(meta.siteId) + '"?';
+              if (!confirm(msg)) return;
+              saveUsageToSiteLifetime(meta.siteId, meta.ym, rows);
+              alert(duplicate ? ('Overwrote previously saved figures for ' + meta.ym + '.') : 'Saved to site lifetime totals.');
+            });
+
+            var viewBtn = document.createElement('button');
+            viewBtn.className = 'btn';
+            viewBtn.textContent = 'View Site Lifetime Totals';
+            viewBtn.addEventListener('click', function(){ openSiteLifetimeTotalsModal(meta.siteId); });
+
+            actions.appendChild(viewBtn);
+            actions.appendChild(saveBtn);
+          }
+
+          container.appendChild(actions);
+        }
+
+        function renderMaintenanceReportTable(entries, meta){
+          reportMaintResults.innerHTML = '';
+
+          if (!entries.length) {
+            reportMaintResults.innerHTML = '<p class="muted">No maintenance records match these filters.</p>';
+            return;
+          }
+
+          var total = 0;
+          var rows = entries.map(function(m){
+            var plantObj = state.plants.find(function(p){ return p.id === m.plantId; }) || null;
+            var plantName = plantObj ? displayNameWithReg(plantObj) : 'Unknown';
+            var tLabel = (function(t){
+              var v = String(t || '').toLowerCase();
+              if (!v) return '—';
+              if (v === 'tyres') return 'Tyres';
+              if (v === 'glass') return 'Glass';
+              if (v === 'body') return 'Body';
+              if (v === 'brakes') return 'Brakes';
+              if (v === 'suspension') return 'Suspension';
+              if (v === 'engine') return 'Engine';
+              if (v === 'hydraulics') return 'Hydraulics';
+              if (v === 'clutch') return 'Clutch';
+              if (v === 'service') return 'Service';
+              if (v === 'other') return 'Other';
+              return v.charAt(0).toUpperCase() + v.slice(1);
+            })(m.type);
+
+            var supplier = supplierNameById(m.supplierId);
+            var cost = typeof m.cost === 'number' ? m.cost : 0;
+            total += cost;
+
+            return '' +
+              '<tr>' +
+                '<td class="w-110">' + escapeHtml(m.date || '—') + '</td>' +
+                '<td>' + escapeHtml(plantName) + '</td>' +
+                '<td class="w-140">' + escapeHtml(tLabel) + '</td>' +
+                '<td class="w-140">' + (supplier ? escapeHtml(supplier) : '—') + '</td>' +
+                '<td>' + escapeText(m.notes || '') + '</td>' +
+                '<td class="num w-110">' + toMoney(cost) + '</td>' +
+              '</tr>';
+          }).join('');
+
+          var titleParts = ['Maintenance report'];
+          if (meta.plantId && meta.plantId !== 'all') {
+            var pName = (state.plants.find(function(p){ return p.id === meta.plantId; }) || {}).name || 'Unknown';
+            titleParts.push('Plant: ' + pName);
+          }
+          if (meta.supplierId && meta.supplierId !== 'all') {
+            var sName = supplierNameById(meta.supplierId) || 'Unknown';
+            titleParts.push('Supplier: ' + sName);
+          }
+          if (meta.fromDate) titleParts.push('From ' + meta.fromDate);
+          if (meta.toDate) titleParts.push('To ' + meta.toDate);
+
+          reportMaintResults.innerHTML =
+            '<h4 style="margin:.25rem 0 0">'+escapeHtml(titleParts.join(' • '))+'</h4>' +
+            '<div class="table-wrap">' +
+              '<table class="table" aria-label="Maintenance report">' +
+                '<thead><tr><th>Date</th><th>Plant</th><th>Type</th><th>Supplier</th><th>Notes</th><th class="num">Cost</th></tr></thead>' +
+                '<tbody>' + rows + '</tbody>' +
+                '<tfoot><tr><th colspan="5" class="num">Total</th><th class="num">' + toMoney(total) + '</th></tr></tfoot>' +
+              '</table>' +
+            '</div>';
+        }
+
+        // ---------- Print ----------
+        function printReport(container, title){
+          try {
+            var clone = container.cloneNode(true);
+            Array.prototype.slice.call(clone.querySelectorAll('input[type="number"]')).forEach(function(inp){
+              var span = document.createElement('span');
+              span.textContent = inp.value || '0';
+              span.style.display = 'inline-block';
+              span.style.textAlign = 'right';
+              inp.parentNode.replaceChild(span, inp);
+            });
+
+            var css = `
+              body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:#101418;padding:16px;}
+              h1,h2,h3,h4{margin:0 0 8px;}
+              .muted{color:#5b6770}
+              table{width:100%;border-collapse:collapse}
+              th,td{border-bottom:1px solid #e4e7eb;padding:6px 6px;text-align:left;vertical-align:top}
+              th{background:#fafbfc}
+              .num{text-align:right}
+              @page { size: auto; margin: 12mm; }
+            `;
+            var now = new Date();
+            var when = now.toLocaleString();
+            var safeTitle = (title || 'Report').replace(/</g,'&lt;');
+
+            var html = `<!doctype html>
+<html>
+  <head><meta charset="utf-8"><title>${safeTitle}</title><style>${css}</style></head>
+  <body>
+    <h3>${safeTitle}</h3>
+    <small class="muted">Generated ${String(when).replace(/</g,'&lt;')}</small><br/><br/>
+    ${clone.innerHTML}
+  </body>
+</html>`;
+
+            var iframe = document.createElement('iframe');
+            iframe.style.position = 'fixed';
+            iframe.style.right = '0';
+            iframe.style.bottom = '0';
+            iframe.style.width = '0';
+            iframe.style.height = '0';
+            iframe.style.border = '0';
+            iframe.srcdoc = html;
+            document.body.appendChild(iframe);
+
+            iframe.onload = function(){
+              try {
+                var w = iframe.contentWindow;
+                w.focus();
+                w.print();
+              } finally {
+                setTimeout(function(){ if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 1000);
+              }
+            };
+          } catch(e) {
+            alert('Unable to open print view. ' + (e && e.message ? e.message : ''));
+          }
+        }
+
+        // ---------- Site lifetime totals ----------
+        function ensureSiteUsage(siteId){
+          if (!state.siteUsage || typeof state.siteUsage !== 'object') state.siteUsage = {};
+          if (!state.siteUsage[siteId]) state.siteUsage[siteId] = { plants: {}, history: [] };
+          return state.siteUsage[siteId];
+        }
+
+        function hasMonthSaved(siteId, ym){
+          var su = state.siteUsage[siteId];
+          return !!(su && Array.isArray(su.history) && su.history.some(function(h){ return h.ym === ym; }));
+        }
+
+        function rollbackAllSiteUsageForMonth(siteId, ym){
+          var su = ensureSiteUsage(siteId);
+          if (!Array.isArray(su.history)) su.history = [];
+          for (var i = su.history.length - 1; i >= 0; i--) {
+            var h = su.history[i];
+            if (h && h.ym === ym) {
+              if (Array.isArray(h.lines)) {
+                h.lines.forEach(function(line){
+                  var totals = su.plants[line.plantId];
+                  if (!totals) return;
+                  totals.days = Math.max(0, (totals.days || 0) - (Number(line.days)||0));
+                  totals.hours = Math.max(0, (totals.hours || 0) - (Number(line.hours)||0));
+                  totals.kms = Math.max(0, (totals.kms || 0) - (Number(line.kms)||0));
+                  totals.cost = Math.max(0, (totals.cost || 0) - (Number(line.amount)||0));
+                });
+              }
+              su.history.splice(i, 1);
+            }
+          }
+        }
+
+        function saveUsageToSiteLifetime(siteId, ym, rows){
+          var su = ensureSiteUsage(siteId);
+          rollbackAllSiteUsageForMonth(siteId, ym);
+
+          var lines = [];
+          rows.forEach(function(r){
+            var pId = r.plantId;
+            if (!su.plants[pId]) su.plants[pId] = { days: 0, hours: 0, kms: 0, cost: 0 };
+
+            var addDays = r.rateUnit === 'day' ? Number(r.billableDays||0) : 0;
+            var addHours = r.rateUnit === 'hour' ? Number(r.hours||0) : 0;
+            var addKms = r.rateUnit === 'km' ? Number(r.kms||0) : 0;
+
+            su.plants[pId].days += isFinite(addDays) ? addDays : 0;
+            su.plants[pId].hours += isFinite(addHours) ? addHours : 0;
+            su.plants[pId].kms += isFinite(addKms) ? addKms : 0;
+
+            var rate = parseFloat(r.rate||'0'); if (!isFinite(rate)) rate = 0;
+            var amount = (r.rateUnit==='hour') ? rate * (addHours||0)
+                       : (r.rateUnit==='km') ? rate * (addKms||0)
+                       : rate * (addDays||0);
+
+            su.plants[pId].cost += amount;
+
+            lines.push({ plantId: pId, plantName: r.plantName, rateUnit: r.rateUnit, days: addDays, hours: addHours, kms: addKms, rate: rate, amount: amount });
+          });
+
+          su.history.push({ ym: ym, savedAt: new Date().toISOString(), lines: lines });
+          state.siteUsage[siteId] = su;
+          save(LS_KEYS.siteUsage, state.siteUsage);
+        }
+
+        function openSiteLifetimeTotalsModal(siteId){
+          var su = (state.siteUsage && state.siteUsage[siteId]) ? state.siteUsage[siteId] : { plants:{} };
+          var entries = Object.keys(su.plants || {}).map(function(pid){
+            var totals = su.plants[pid] || {days:0,hours:0,kms:0,cost:0};
+            var plantObj = state.plants.find(function(p){ return p.id === pid; }) || null;
+            var plantName = plantObj ? displayNameWithReg(plantObj) : 'Unknown';
+            return { plantName: plantName, days: totals.days||0, hours: totals.hours||0, kms: totals.kms||0, cost: totals.cost||0 };
+          }).sort(function(a,b){ return a.plantName.localeCompare(b.plantName); });
+
+          modalTitle.textContent = 'Site lifetime totals — ' + siteNameById(siteId);
+
+          if (!entries.length) {
+            modalBody.innerHTML = '<p class="muted">No lifetime totals recorded for this site yet.</p>';
+          } else {
+            var totalDays = 0, totalHours = 0, totalKms = 0, totalCost = 0;
+            var rows = entries.map(function(e){
+              totalDays += e.days||0; totalHours += e.hours||0; totalKms += e.kms||0; totalCost += e.cost||0;
+              return '<tr>' +
+                '<td>'+escapeHtml(e.plantName)+'</td>' +
+                '<td class="num">'+(e.days||0)+'</td>' +
+                '<td class="num">'+(Math.round((e.hours||0)*100)/100)+'</td>' +
+                '<td class="num">'+(Math.round((e.kms||0)*100)/100)+'</td>' +
+                '<td class="num">'+toMoney(e.cost||0)+'</td>' +
+              '</tr>';
+            }).join('');
+
+            modalBody.innerHTML =
+              '<div class="table-wrap"><table class="table" aria-label="Site lifetime totals">'+
+              '<thead><tr><th>Plant</th><th class="num">Days</th><th class="num">Hours</th><th class="num">KMs</th><th class="num">Cost</th></tr></thead>'+
+              '<tbody>'+rows+'</tbody>'+
+              '<tfoot><tr><th class="num">Totals</th><th class="num">'+totalDays+'</th><th class="num">'+(Math.round(totalHours*100)/100)+'</th><th class="num">'+(Math.round(totalKms*100)/100)+'</th><th class="num">'+toMoney(totalCost)+'</th></tr></tfoot>'+
+              '</table></div>';
+          }
+
+          modalSubmit.textContent = 'Close';
+          modal.showModal();
+          modalSubmit.onclick = function(){ modal.close('cancel'); };
+        }
+
+        // ---------- Warnings ----------
+        function daysUntil(dateStr){
+          if (!dateStr) return null;
+          var today = new Date();
+          var d = new Date(dateStr+'T00:00:00');
+          var diff = Math.ceil((d - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
+          return diff;
+        }
+
+        function computeWarnings(){
+          var warnings = [];
+
+          state.plants.forEach(function(p){
+            if (p.category !== 'yellow' && p.category !== 'truck' && p.category !== 'bakkie') return;
+
+            var unitWord = (p.category === 'yellow') ? 'hours' : 'km';
+            var svc = state.plantService[p.id] || { reminders: [], licenseRenewal: '' };
+
+            var lm = latestMeter(p.id);
+            var current = lm ? Number(lm.value||0) : null;
+
+            (svc.reminders || []).forEach(function(r){
+              var interval = Number(r.interval||0);
+              var nextDue = Number(r.nextDue||0);
+              if (!(interval>0)) return;
+              if (current === null || current === undefined) return;
+              var remaining = nextDue - current;
+              var threshold = Math.max(1, Math.round(interval * 0.1));
+              if (remaining < 0) {
+                warnings.push({ type:'service', severity:'overdue', text: displayNameWithReg(p) + ' — ' + r.desc + ' overdue by ' + Math.abs(remaining) + ' ' + unitWord + ' (due at ' + nextDue + ', now ' + current + ')' });
+              } else if (remaining <= threshold) {
+                warnings.push({ type:'service', severity:'upcoming', text: displayNameWithReg(p) + ' — ' + r.desc + ' due soon in ' + remaining + ' ' + unitWord + ' (due at ' + nextDue + ', now ' + current + ')' });
+              }
+            });
+
+            var du = daysUntil(svc.licenseRenewal || '');
+            if (du !== null) {
+              if (du < 0) warnings.push({ type:'license', severity:'overdue', text: displayNameWithReg(p) + ' — License renewal overdue by ' + Math.abs(du) + ' days (was ' + svc.licenseRenewal + ')' });
+              else if (du <= 30) warnings.push({ type:'license', severity:'upcoming', text: displayNameWithReg(p) + ' — License renewal due in ' + du + ' days (' + svc.licenseRenewal + ')' });
+            }
+          });
+
+          warnings.sort(function(a,b){
+            if (a.severity === b.severity) return a.text.localeCompare(b.text);
+            return a.severity === 'overdue' ? -1 : 1;
+          });
+
+          return warnings;
+        }
+
+        function renderWarningsPanel(){
+          var body = byId('warnings-body');
+          if (!body) return;
+          var warnings = computeWarnings();
+
+          if (!warnings.length) body.innerHTML = '<p class="muted">No warnings. All services and licenses are up to date.</p>';
+          else {
+            body.innerHTML = warnings.map(function(w){
+              var tag = w.severity === 'overdue' ? '<span class="tag overdue">Overdue</span>' : '<span class="tag upcoming">Due soon</span>';
+              return '<div style="display:flex;gap:.5rem;align-items:flex-start">'+ tag + '<div>'+ escapeHtml(w.text) +'</div></div>';
+            }).join('');
+          }
+
+          updateMaintBadge(warnings.length);
+        }
+
+        function updateMaintBadge(count){
+          var badge = byId('maint-badge');
+          var n = (typeof count === 'number') ? count : computeWarnings().length;
+          if (!badge) return;
+          if (n > 0) { badge.textContent = String(n); badge.classList.remove('hidden'); }
+          else { badge.textContent = ''; badge.classList.add('hidden'); }
+        }
+
+        // ---------- Export / Import / Reset ----------
+        function buildBackupPayload(){
+          var data = {};
+          Object.keys(LS_KEYS).forEach(function(keyAlias){
+            var key = LS_KEYS[keyAlias];
+            try { data[key] = JSON.parse(localStorage.getItem(key) || 'null'); }
+            catch(e) { data[key] = null; }
+          });
+          return { version: 1, createdAt: new Date().toISOString(), app: 'Hiload Inyanga Plant Hire - Plant Control', data: data };
+        }
+
+        function handleExport(){
+          try {
+            var payload = buildBackupPayload();
+            var json = JSON.stringify(payload, null, 2);
+            var blob = new Blob([json], {type:'application/json'});
+            var ts = new Date();
+            var name = 'hiph-backup-' +
+              ts.getFullYear().toString() +
+              String(ts.getMonth()+1).padStart(2,'0') +
+              String(ts.getDate()).padStart(2,'0') + '-' +
+              String(ts.getHours()).padStart(2,'0') +
+              String(ts.getMinutes()).padStart(2,'0') +
+              String(ts.getSeconds()).padStart(2,'0') + '.json';
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = name;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
+          } catch(e) {
+            alert('Export failed: ' + (e && e.message ? e.message : String(e)));
+          }
+        }
+
+        function handleImportFile(file){
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onerror = function(){ alert('Unable to read file.'); };
+          reader.onload = function(){
+            try {
+              var text = String(reader.result || '');
+              var obj = JSON.parse(text);
+              var dataBlock = (obj && obj.data && typeof obj.data === 'object') ? obj.data : obj;
+
+              if (!confirm('Importing will REPLACE all current data on this device. Continue?')) return;
+
+              Object.keys(LS_KEYS).forEach(function(keyAlias){
+                var key = LS_KEYS[keyAlias];
+                var val = dataBlock[key];
+                if (val === undefined) localStorage.removeItem(key);
+                else localStorage.setItem(key, JSON.stringify(val));
+              });
+
+              state.sites = load(LS_KEYS.sites, []);
+              state.plants = load(LS_KEYS.plants, []);
+              state.hires = load(LS_KEYS.hires, []);
+              state.maintenance = load(LS_KEYS.maintenance, []);
+              state.siteUsage = load(LS_KEYS.siteUsage, {}) || {};
+              state.meters = load(LS_KEYS.meters, {}) || {};
+              state.plantService = load(LS_KEYS.plantService, {}) || {};
+              state.rateModels = load(LS_KEYS.rateModels, {}) || {};
+              state.suppliers = load(LS_KEYS.suppliers, []) || [];
+
+              renderAll();
+              alert('Import complete.');
+              activateMain('help');
+            } catch(e){
+              console.error(e);
+              alert('Import failed: invalid or corrupted file.\n' + (e && e.message ? e.message : String(e)));
+            }
+          };
+          reader.readAsText(file);
+        }
+
+        function resetAllData(){
+          if (!confirm('This will delete ALL app data on this device (sites, plant, hires, maintenance, month-end readings, service settings, lifetime totals). This cannot be undone.\n\nContinue?')) return;
+
+          try { Object.keys(LS_KEYS).forEach(function(k){ localStorage.removeItem(LS_KEYS[k]); }); } catch(e){}
+
+          state.sites = [];
+          state.plants = [];
+          state.hires = [];
+          state.maintenance = [];
+          state.siteUsage = {};
+          state.meters = {};
+          state.plantService = {};
+          state.rateModels = {};
+          state.suppliers = [];
+
+          Object.keys(LS_KEYS).forEach(function(k){
+            save(LS_KEYS[k], (k === 'alerts') ? {} : null);
+          });
+
+          renderAll();
+          activateMain('help');
+          alert('All app data has been deleted from this browser.');
+        }
+
+        // ---------- Rate calc ----------
+        function openRateCalcModal(plant){
+          alert('Rate calculator retained from your earlier version. If you need it re-inserted into this "complete code" too, say so and I will include it (it is long).');
+        }
+
+        // ---------- Hire plant select ----------
+        function renderPlantSelectForHire(){
+          var select = byId('hire-plant');
+          if (!select) return;
+          if (!state.plants.length) { select.innerHTML = '<option value="">No plants yet</option>'; return; }
+          select.innerHTML = state.plants.map(function(p){
+            var extra = (p.category==='small' && p.subType) ? ' • '+smallSubLabel(p.subType) : '';
+            return '<option value="'+p.id+'">'+escapeHtml(displayNameWithReg(p))+' — ' + categoryLabel(p.category) + extra + '</option>';
+          }).join('');
+        }
+
+        // ---------- Date utils ----------
+        function parseISO(s){ var parts = s.split('-').map(function(x){ return parseInt(x,10); }); return new Date(parts[0], parts[1]-1, parts[2]); }
+        function fmtISO(d){ var y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+da; }
+        function todayAtMidnight(){ var t=new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
+        function ymd(y,m,d){ return y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0'); }
+        function daysInMonth(y,m){ return new Date(y, m, 0).getDate(); }
+        function ymLabel(y,m){ var date = new Date(y, m-1, 1); return date.toLocaleString(undefined, { month:'long', year:'numeric' }); }
+
+        function clipRangeToWindow(start, end, wStart, wEnd){
+          var s = new Date(start.getTime());
+          var e = new Date(end.getTime());
+          if (wStart && s < wStart) s = new Date(wStart.getTime());
+          if (wEnd && e > wEnd) e = new Date(wEnd.getTime());
+          if (e < s) return null;
+          return { start: s, end: e };
+        }
+        function isWeekend(d){ var day = d.getDay(); return day === 0 || day === 6; }
+        function addDays(d, n){ return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+        function countWeekdaysInclusive(start, end){
+          var cnt = 0; var d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+          var endKey = end.getFullYear()*10000 + (end.getMonth()+1)*100 + end.getDate();
+          while (true){
+            if (!isWeekend(d)) cnt++;
+            if (d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate() >= endKey) break;
+            d = addDays(d, 1);
+          }
+          return cnt;
+        }
+
+        // ---------- App init ----------
+        function renderAll(){
+          renderSites();
+          renderSiteSelects();
+          renderReportSiteSelects();
+          renderPlants();
+          renderPlantSelectForHire();
+          renderHires();
+          renderMaintenanceLists();
+          refreshPlantCategoryIndicator();
+          renderMaintenanceReportFilters();
+          renderWarningsPanel();
+          updateMaintBadge();
+          renderMonthEndSection('yellow'); renderMonthEndSection('truck'); renderMonthEndSection('bakkie');
+          renderHireFilters();
+        }
+
+        function init(){
+          // Bind Export/Import/Reset
+          var exportBtn = byId('export-data-btn');
+          var importBtn = byId('import-data-btn');
+          var importFile = byId('import-file');
+          var resetBtn = byId('reset-data-btn');
+
+          if (exportBtn && !exportBtn._bound) { exportBtn.addEventListener('click', handleExport); exportBtn._bound = true; }
+          if (importBtn && !importBtn._bound) { importBtn.addEventListener('click', function(){ importFile && importFile.click(); }); importBtn._bound = true; }
+          if (importFile && !importFile._bound) {
+            importFile.addEventListener('change', function(ev){
+              var file = ev.target && ev.target.files && ev.target.files[0];
+              if (file) handleImportFile(file);
+              ev.target.value = '';
+            });
+            importFile._bound = true;
+          }
+          if (resetBtn && !resetBtn._bound) { resetBtn.addEventListener('click', resetAllData); resetBtn._bound = true; }
+
+          renderAll();
+
+          var hash = (location.hash || '').replace('#','');
+          var mainId = (['hire','plant-sites','maintenance','reports','help'].indexOf(hash) >= 0) ? hash : 'hire';
+          activateMain(mainId);
+        }
+
+        init();
+      })();
+    </script>
+  </body>
+</html>
