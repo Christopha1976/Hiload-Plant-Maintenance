@@ -1,0 +1,16 @@
+{
+  "name": "hiload-plant-maintenance-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "http-server . -p 1420 -c-1",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "http-server": "^14.1.1"
+  }
+}
