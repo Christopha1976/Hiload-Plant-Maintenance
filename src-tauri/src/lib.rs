@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -462,17 +463,28 @@ fn write_file_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     fs::create_dir_all(parent)
         .map_err(|e| format!("Could not create the invoice documents folder: {e}"))?;
 
-    let temp_path = path.with_extension(format!(
-        "{}{}.tmp",
-        path.extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| format!("{ext}."))
-            .unwrap_or_default(),
-        unix_timestamp_string()
-    ));
+    let temp_path = (0..16)
+        .map(|attempt| {
+            path.with_extension(format!(
+                "{}{}.{}.tmp",
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| format!("{ext}."))
+                    .unwrap_or_default(),
+                OffsetDateTime::now_utc().unix_timestamp_nanos(),
+                attempt
+            ))
+        })
+        .find(|candidate| !candidate.exists())
+        .ok_or_else(|| {
+            "Could not prepare a safe temporary file for this attachment.".to_string()
+        })?;
 
-    let mut file =
-        fs::File::create(&temp_path).map_err(|e| format!("Could not create document file: {e}"))?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_path)
+        .map_err(|e| format!("Could not create document file: {e}"))?;
     file.write_all(bytes)
         .and_then(|_| file.flush())
         .map_err(|e| format!("Could not write document file: {e}"))?;
@@ -739,6 +751,14 @@ fn open_path_with_system_default(path: &Path) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("Could not open the saved attachment: {e}"))?;
     }
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    {
+        let _ = path;
+        return Err(
+            "Opening saved attachments is not supported on this operating system build."
+                .to_string(),
+        );
+    }
     Ok(())
 }
 
@@ -753,9 +773,6 @@ fn restore_desktop_backup_at_paths(
     }
 
     let manifest = read_backup_manifest(selected_backup_path)?;
-    let conn = open_db(&paths.db_path)?;
-    let (data, _) = load_live_state(&conn)?;
-    let safety_backup = create_desktop_backup(paths, live_counts(&data), "pre-restore-safety")?;
 
     let staged_root = paths
         .backups_dir
@@ -773,6 +790,10 @@ fn restore_desktop_backup_at_paths(
         &selected_backup_path.join(&manifest.documents.relative_dir),
         &staged_documents,
     )?;
+
+    let conn = open_db(&paths.db_path)?;
+    let (data, _) = load_live_state(&conn)?;
+    let safety_backup = create_desktop_backup(paths, live_counts(&data), "pre-restore-safety")?;
 
     let rollback_root = paths
         .backups_dir

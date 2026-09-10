@@ -2350,6 +2350,9 @@
             if (!confirm('Delete this pending invoice record?')) return;
           }
           var continueDelete = function(){
+            var previousInvoices = state.invoices.slice();
+            var previousMaintenance = state.maintenance.slice();
+            var previousDoc = existingDoc ? Object.assign({}, existingDoc) : null;
             if (inv.status === 'posted') {
               state.maintenance = state.maintenance.filter(function(m){ return m.invoiceId !== inv.id; });
               save(LS_KEYS.maintenance, state.maintenance);
@@ -2359,7 +2362,17 @@
             inv.hasDocument = false;
             inv.docStorageStatus = 'no_file';
             save(LS_KEYS.invoices, state.invoices);
-            persistInvoiceDocs();
+            if (!persistInvoiceDocs()) {
+              state.invoices = previousInvoices;
+              state.maintenance = previousMaintenance;
+              if (previousDoc) state.invoiceDocs[invoiceId] = previousDoc;
+              saveLocalOnly(LS_KEYS.invoices, state.invoices);
+              saveLocalOnly(LS_KEYS.maintenance, state.maintenance);
+              saveLocalOnly(LS_KEYS.invoiceDocs, state.invoiceDocs);
+              setInvoiceStatusText('The invoice was not deleted because the document change could not be saved safely. Please try again.');
+              alert('The invoice was not deleted because the document change could not be saved safely. Please try again.');
+              return;
+            }
             renderMaintenanceLists();
             renderMaintenanceReportFilters();
             refreshInvoiceUi();
@@ -2474,12 +2487,23 @@
               if (!confirm('Remove this invoice attachment now?')) return;
               if (doc.managedRelativePath && desktopIsTauri) {
                 removeManagedInvoiceAttachment(inv.id, doc).then(function(result){
+                  var previousInv = Object.assign({}, state.invoices[idx] || inv);
+                  var previousDoc = state.invoiceDocs[inv.id] ? Object.assign({}, state.invoiceDocs[inv.id]) : null;
                   delete state.invoiceDocs[inv.id];
                   inv.hasDocument = false;
                   inv.docStorageStatus = 'no_file';
                   state.invoices[idx] = inv;
                   save(LS_KEYS.invoices, state.invoices);
-                  persistInvoiceDocs();
+                  if (!persistInvoiceDocs()) {
+                    if (previousDoc) state.invoiceDocs[inv.id] = previousDoc;
+                    state.invoices[idx] = previousInv;
+                    saveLocalOnly(LS_KEYS.invoices, state.invoices);
+                    saveLocalOnly(LS_KEYS.invoiceDocs, state.invoiceDocs);
+                    var revertMsg = 'The attachment file was removed, but the invoice record could not be updated safely. Please reopen the invoice and try again.';
+                    setInvoiceStatusText(revertMsg);
+                    alert(revertMsg);
+                    return;
+                  }
                   refreshInvoiceUi();
                   if (result && result.message) setInvoiceStatusText(result.message);
                   modal.close('submit');
@@ -2489,12 +2513,23 @@
                   alert(msg);
                 });
               } else {
+                var previousInvBrowser = Object.assign({}, state.invoices[idx] || inv);
+                var previousBrowserDoc = state.invoiceDocs[inv.id] ? Object.assign({}, state.invoiceDocs[inv.id]) : null;
                 delete state.invoiceDocs[inv.id];
                 inv.hasDocument = false;
                 inv.docStorageStatus = 'no_file';
                 state.invoices[idx] = inv;
                 save(LS_KEYS.invoices, state.invoices);
-                persistInvoiceDocs();
+                if (!persistInvoiceDocs()) {
+                  if (previousBrowserDoc) state.invoiceDocs[inv.id] = previousBrowserDoc;
+                  state.invoices[idx] = previousInvBrowser;
+                  saveLocalOnly(LS_KEYS.invoices, state.invoices);
+                  saveLocalOnly(LS_KEYS.invoiceDocs, state.invoiceDocs);
+                  var browserMsg = 'The attachment could not be removed safely. Please try again.';
+                  setInvoiceStatusText(browserMsg);
+                  alert(browserMsg);
+                  return;
+                }
                 refreshInvoiceUi();
                 setInvoiceStatusText('Attachment removed from this invoice.');
                 modal.close('submit');
@@ -2577,7 +2612,7 @@
             if (desktopIsTauri) {
               var previousDoc = doc ? Object.assign({}, doc) : null;
               importDesktopInvoiceAttachment(inv.id, replacement).then(function(documentPayload){
-                state.invoiceDocs[inv.id] = {
+                var nextDoc = {
                   fileName: documentPayload.fileName || '',
                   mimeType: documentPayload.mimeType || '',
                   size: documentPayload.size || 0,
@@ -2586,7 +2621,17 @@
                   sha256: documentPayload.sha256 || '',
                   storageKind: documentPayload.storageKind || 'desktop_managed_file'
                 };
-                persistInvoiceDocs();
+                state.invoiceDocs[inv.id] = nextDoc;
+                if (!persistInvoiceDocs()) {
+                  if (previousDoc) state.invoiceDocs[inv.id] = previousDoc;
+                  else delete state.invoiceDocs[inv.id];
+                  saveLocalOnly(LS_KEYS.invoiceDocs, state.invoiceDocs);
+                  removeManagedInvoiceAttachment(inv.id, nextDoc).catch(function(){ return null; });
+                  var persistMsg = 'The current attachment was kept because the invoice record could not be updated safely after saving the new file.';
+                  setInvoiceStatusText(persistMsg);
+                  alert(persistMsg);
+                  return;
+                }
                 applyInvoiceUpdate(documentPayload, 'stored');
                 setInvoiceStatusText('Attachment replaced and saved in the desktop documents folder.');
                 if (previousDoc && previousDoc.managedRelativePath) {
