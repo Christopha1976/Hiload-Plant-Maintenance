@@ -9,7 +9,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::{AppHandle, Manager};
-use time::{format_description::well_known::Rfc3339, macros::format_description, OffsetDateTime};
+use time::{
+    format_description::well_known::Rfc3339, macros::format_description, Date, OffsetDateTime,
+};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,6 +90,48 @@ struct RestoreResult {
     message: String,
 }
 
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct InvoiceAiStatus {
+    enabled: bool,
+    provider: String,
+    setup_available: bool,
+    message: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct InvoiceFieldSuggestion {
+    field: String,
+    label: String,
+    value: String,
+    confidence: String,
+    reason: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InvoiceReadResult {
+    source_file_name: String,
+    mime_type: String,
+    provider: String,
+    message: String,
+    extracted_text: String,
+    suggestions: Vec<InvoiceFieldSuggestion>,
+    warnings: Vec<String>,
+    limitations: Vec<String>,
+    ai: InvoiceAiStatus,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InvoiceReadRequest {
+    relative_path: Option<String>,
+    file_name: Option<String>,
+    mime_type: Option<String>,
+    data_base64: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BackupManifest {
@@ -124,6 +168,8 @@ struct AppPaths {
 
 const MANAGED_INVOICE_DIR: &str = "invoices";
 const BACKUP_FORMAT_VERSION: u32 = 1;
+const MAX_INVOICE_READ_BYTES: usize = 10 * 1024 * 1024;
+const MAX_INVOICE_EXTRACT_TEXT_CHARS: usize = 12_000;
 
 const STATE_ARRAY_KEYS: &[&str] = &[
     "hiph_sites",
@@ -533,6 +579,674 @@ fn save_managed_invoice_document(
         size_bytes: bytes.len() as u64,
         sha256: checksum,
         message: "Attachment saved in the desktop documents folder.".to_string(),
+    })
+}
+
+fn default_invoice_ai_status() -> InvoiceAiStatus {
+    InvoiceAiStatus {
+        enabled: false,
+        provider: "disabled".to_string(),
+        setup_available: false,
+        message: "Optional cloud AI review is disabled in this release. No API key is required for normal OCR use, and no cloud provider is configured by this app yet.".to_string(),
+    }
+}
+
+fn normalize_whitespace_line(line: &str) -> String {
+    line.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn normalize_invoice_text(text: &str) -> String {
+    text.replace('\r', "")
+        .lines()
+        .map(normalize_whitespace_line)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn truncate_chars(text: &str, limit: usize) -> String {
+    let mut result = String::new();
+    for (index, ch) in text.chars().enumerate() {
+        if index >= limit {
+            result.push('…');
+            break;
+        }
+        result.push(ch);
+    }
+    result
+}
+
+fn base_name_or_fallback(file_name: &str, fallback: &str) -> String {
+    Path::new(file_name)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum InvoiceReadKind {
+    Pdf,
+    Png,
+    Jpeg,
+}
+
+fn detect_invoice_read_kind(file_name: &str, mime_type: &str) -> Result<InvoiceReadKind, String> {
+    let mime = mime_type.trim().to_ascii_lowercase();
+    if mime == "application/pdf" {
+        return Ok(InvoiceReadKind::Pdf);
+    }
+    if mime == "image/png" {
+        return Ok(InvoiceReadKind::Png);
+    }
+    if mime == "image/jpeg" || mime == "image/jpg" {
+        return Ok(InvoiceReadKind::Jpeg);
+    }
+
+    let ext = Path::new(file_name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+
+    match ext.as_str() {
+        "pdf" => Ok(InvoiceReadKind::Pdf),
+        "png" => Ok(InvoiceReadKind::Png),
+        "jpg" | "jpeg" => Ok(InvoiceReadKind::Jpeg),
+        _ => {
+            Err("Invoice reading currently supports PDF, PNG and JPG/JPEG files only.".to_string())
+        }
+    }
+}
+
+fn load_invoice_read_bytes(
+    paths: &AppPaths,
+    request: &InvoiceReadRequest,
+) -> Result<(Vec<u8>, String, String), String> {
+    let fallback_name = request
+        .file_name
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("invoice-document");
+    let mime_type = request
+        .mime_type
+        .clone()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    if let Some(relative_path) = request
+        .relative_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let full_path = resolve_managed_document_path(paths, relative_path)?;
+        if !full_path.is_file() {
+            return Err("The saved invoice attachment file could not be found. Please attach it again and try another read.".to_string());
+        }
+        let size = full_path
+            .metadata()
+            .map_err(|e| format!("Could not check the attachment size safely: {e}"))?
+            .len() as usize;
+        if size > MAX_INVOICE_READ_BYTES {
+            return Err(format!(
+                "This file is too large to read safely. Please use a file under {} MB.",
+                MAX_INVOICE_READ_BYTES / (1024 * 1024)
+            ));
+        }
+        let bytes = fs::read(&full_path)
+            .map_err(|e| format!("The saved invoice attachment could not be read safely: {e}"))?;
+        let file_name = base_name_or_fallback(&full_path.to_string_lossy(), fallback_name);
+        return Ok((bytes, file_name, mime_type));
+    }
+
+    let data_base64 = request
+        .data_base64
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            "Please choose or attach a PDF or photo first, then try Read invoice with OCR again."
+                .to_string()
+        })?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64)
+        .map_err(|e| format!("The selected invoice file could not be read safely: {e}"))?;
+    if bytes.is_empty() {
+        return Err("The selected invoice file was empty.".to_string());
+    }
+    if bytes.len() > MAX_INVOICE_READ_BYTES {
+        return Err(format!(
+            "This file is too large to read safely. Please use a file under {} MB.",
+            MAX_INVOICE_READ_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok((bytes, fallback_name.to_string(), mime_type))
+}
+
+fn make_temp_invoice_read_path(paths: &AppPaths, file_name: &str) -> Result<PathBuf, String> {
+    let temp_dir = paths.app_data_dir.join("temp");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Could not prepare the temporary OCR folder: {e}"))?;
+
+    let safe_name = safe_display_file_name(file_name, "");
+    for attempt in 0..32 {
+        let candidate = temp_dir.join(format!(
+            "ocr-{}-{}-{}",
+            backup_name_timestamp(),
+            attempt,
+            safe_name
+        ));
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+
+    Err("Could not prepare a safe temporary OCR file.".to_string())
+}
+
+fn run_powershell_image_ocr(path: &Path) -> Result<String, String> {
+    const POWERSHELL_OCR_SCRIPT: &str = r#"
+$ErrorActionPreference = 'Stop'
+$filePath = $env:HILOAD_OCR_FILE
+if ([string]::IsNullOrWhiteSpace($filePath)) { throw 'Missing OCR file path.' }
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
+$null = [Windows.Storage.FileAccessMode, Windows.Storage, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Foundation, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapPixelFormat, Windows.Foundation, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapAlphaMode, Windows.Foundation, ContentType = WindowsRuntime]
+$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
+$file = [Windows.Storage.StorageFile]::GetFileFromPathAsync($filePath).AsTask().GetAwaiter().GetResult()
+$stream = $file.OpenAsync([Windows.Storage.FileAccessMode]::Read).AsTask().GetAwaiter().GetResult()
+$decoder = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream).AsTask().GetAwaiter().GetResult()
+$bitmap = $decoder.GetSoftwareBitmapAsync().AsTask().GetAwaiter().GetResult()
+$ocrBitmap = [Windows.Graphics.Imaging.SoftwareBitmap]::Convert(
+  $bitmap,
+  [Windows.Graphics.Imaging.BitmapPixelFormat]::Bgra8,
+  [Windows.Graphics.Imaging.BitmapAlphaMode]::Premultiplied
+)
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+if (-not $engine) { throw 'Windows local OCR is not available for the current desktop language settings.' }
+$result = $engine.RecognizeAsync($ocrBitmap).AsTask().GetAwaiter().GetResult()
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Write-Output $result.Text
+"#;
+
+    let output = Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            POWERSHELL_OCR_SCRIPT,
+        ])
+        .env("HILOAD_OCR_FILE", path.as_os_str())
+        .output()
+        .map_err(|e| format!("Could not start Windows local OCR: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            "Windows local OCR could not read this image file.".to_string()
+        } else {
+            format!("Windows local OCR could not read this image file: {stderr}")
+        });
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn extract_image_text(paths: &AppPaths, file_name: &str, bytes: &[u8]) -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let temp_path = make_temp_invoice_read_path(paths, file_name)?;
+        write_file_atomic(&temp_path, bytes)?;
+        let result = run_powershell_image_ocr(&temp_path);
+        let _ = fs::remove_file(&temp_path);
+        result
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (paths, file_name, bytes);
+        Err("Image OCR is available only in the Windows desktop app build. PDF files with selectable text can still be read locally.".to_string())
+    }
+}
+
+fn candidate_segments(text: &str) -> Vec<String> {
+    let mut segments = Vec::new();
+    let mut current = String::new();
+
+    for ch in text.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '/' | '-' | '.' | ',' | ':' | '#') {
+            current.push(ch);
+        } else if !current.is_empty() {
+            segments.push(current.clone());
+            current.clear();
+        }
+    }
+
+    if !current.is_empty() {
+        segments.push(current);
+    }
+
+    segments
+}
+
+fn parse_amount_candidate(raw: &str) -> Option<f64> {
+    let mut cleaned = raw
+        .chars()
+        .filter(|ch| ch.is_ascii_digit() || matches!(ch, ',' | '.' | '-'))
+        .collect::<String>();
+    if cleaned.is_empty() {
+        return None;
+    }
+    if cleaned.starts_with('-') {
+        return None;
+    }
+
+    let dot_count = cleaned.matches('.').count();
+    let comma_count = cleaned.matches(',').count();
+
+    if dot_count > 0 && comma_count > 0 {
+        let last_dot = cleaned.rfind('.').unwrap_or(0);
+        let last_comma = cleaned.rfind(',').unwrap_or(0);
+        if last_dot > last_comma {
+            cleaned = cleaned.replace(',', "");
+        } else {
+            cleaned = cleaned.replace('.', "").replace(',', ".");
+        }
+    } else if comma_count > 0 {
+        let last_comma = cleaned.rfind(',').unwrap_or(0);
+        let decimals = cleaned.len().saturating_sub(last_comma + 1);
+        if decimals == 2 {
+            cleaned = cleaned.replace('.', "").replace(',', ".");
+        } else {
+            cleaned = cleaned.replace(',', "");
+        }
+    } else if dot_count > 1 {
+        let last_dot = cleaned.rfind('.').unwrap_or(0);
+        let decimals = cleaned.len().saturating_sub(last_dot + 1);
+        if decimals == 2 {
+            let integer = cleaned[..last_dot].replace('.', "");
+            cleaned = format!("{integer}.{}", &cleaned[last_dot + 1..]);
+        } else {
+            cleaned = cleaned.replace('.', "");
+        }
+    }
+
+    cleaned.parse::<f64>().ok().filter(|value| *value >= 0.0)
+}
+
+fn parse_date_candidate(candidate: &str) -> Option<String> {
+    let cleaned = candidate
+        .trim_matches(|ch: char| matches!(ch, ':' | ',' | ';' | '.'))
+        .trim();
+    if cleaned.is_empty() {
+        return None;
+    }
+
+    let numeric_formats = [
+        format_description!("[year]-[month]-[day]"),
+        format_description!("[day]-[month]-[year]"),
+        format_description!("[day]/[month]/[year]"),
+        format_description!("[day].[month].[year]"),
+    ];
+    for format in numeric_formats {
+        if let Ok(date) = Date::parse(cleaned, format) {
+            return Some(
+                date.format(&format_description!("[year]-[month]-[day]"))
+                    .ok()?,
+            );
+        }
+    }
+
+    let alpha_candidate = cleaned.replace(',', "");
+    let alpha_formats = [
+        format_description!("[day] [month repr:short] [year]"),
+        format_description!("[day] [month repr:long] [year]"),
+        format_description!("[month repr:short] [day] [year]"),
+        format_description!("[month repr:long] [day] [year]"),
+    ];
+    for format in alpha_formats {
+        if let Ok(date) = Date::parse(&alpha_candidate, format) {
+            return Some(
+                date.format(&format_description!("[year]-[month]-[day]"))
+                    .ok()?,
+            );
+        }
+    }
+
+    None
+}
+
+fn find_labeled_line_value(lines: &[&str], labels: &[&str]) -> Option<String> {
+    for (index, line) in lines.iter().enumerate() {
+        let lower = line.to_ascii_lowercase();
+        for label in labels {
+            if let Some(position) = lower.find(label) {
+                let before = lower[..position].chars().last();
+                let after = lower[position + label.len()..].chars().next();
+                let valid_before = before.map(|ch| !ch.is_ascii_alphanumeric()).unwrap_or(true);
+                let valid_after = after.map(|ch| !ch.is_ascii_alphanumeric()).unwrap_or(true);
+                if !valid_before || !valid_after {
+                    continue;
+                }
+                let after = line[position + label.len()..]
+                    .trim_matches(|ch: char| matches!(ch, ':' | '#' | '-' | ' ' | '\t'))
+                    .trim();
+                if !after.is_empty() {
+                    return Some(after.to_string());
+                }
+                if let Some(next_line) = lines
+                    .get(index + 1)
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                {
+                    return Some(next_line.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn find_first_date(text: &str) -> Option<String> {
+    for segment in candidate_segments(text) {
+        if let Some(date) = parse_date_candidate(&segment) {
+            return Some(date);
+        }
+    }
+    None
+}
+
+fn first_meaningful_supplier_line(lines: &[&str]) -> Option<String> {
+    let skip_words = [
+        "invoice",
+        "tax invoice",
+        "vat",
+        "subtotal",
+        "total",
+        "date",
+        "amount",
+        "balance",
+        "page",
+        "bill to",
+        "ship to",
+    ];
+
+    lines.iter().take(8).find_map(|line| {
+        let trimmed = line.trim();
+        if trimmed.len() < 3 {
+            return None;
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        if skip_words.iter().any(|word| lower.contains(word)) {
+            return None;
+        }
+        let digit_count = trimmed.chars().filter(|ch| ch.is_ascii_digit()).count();
+        if digit_count > trimmed.len() / 2 {
+            return None;
+        }
+        Some(trimmed.to_string())
+    })
+}
+
+fn find_labeled_amount(lines: &[&str], labels: &[&str]) -> Option<f64> {
+    for (index, line) in lines.iter().enumerate() {
+        let lower = line.to_ascii_lowercase();
+        for label in labels {
+            if let Some(position) = lower.find(label) {
+                let before = lower[..position].chars().last();
+                let after = lower[position + label.len()..].chars().next();
+                let valid_before = before.map(|ch| !ch.is_ascii_alphanumeric()).unwrap_or(true);
+                let valid_after = after.map(|ch| !ch.is_ascii_alphanumeric()).unwrap_or(true);
+                if !valid_before || !valid_after {
+                    continue;
+                }
+                let after = line[position + label.len()..]
+                    .trim_matches(|ch: char| matches!(ch, ':' | '-' | ' ' | '\t'))
+                    .trim();
+                if let Some(amount) = parse_amount_candidate(after) {
+                    return Some(amount);
+                }
+                if let Some(next_line) = lines
+                    .get(index + 1)
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                {
+                    if let Some(amount) = parse_amount_candidate(next_line) {
+                        return Some(amount);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn build_notes_suggestion(lines: &[&str]) -> Option<String> {
+    let filtered = lines
+        .iter()
+        .map(|line| line.trim())
+        .filter(|line| {
+            let lower = line.to_ascii_lowercase();
+            !line.is_empty()
+                && !lower.contains("invoice")
+                && !lower.contains("subtotal")
+                && !lower.contains("vat")
+                && !lower.contains("total")
+                && !lower.contains("date")
+                && line.chars().any(|ch| ch.is_ascii_alphabetic())
+        })
+        .take(3)
+        .collect::<Vec<_>>();
+
+    if filtered.is_empty() {
+        None
+    } else {
+        Some(truncate_chars(&filtered.join(" | "), 240))
+    }
+}
+
+fn push_suggestion(
+    suggestions: &mut Vec<InvoiceFieldSuggestion>,
+    field: &str,
+    label: &str,
+    value: String,
+    confidence: &str,
+    reason: &str,
+) {
+    if value.trim().is_empty() {
+        return;
+    }
+    if suggestions.iter().any(|item| item.field == field) {
+        return;
+    }
+    suggestions.push(InvoiceFieldSuggestion {
+        field: field.to_string(),
+        label: label.to_string(),
+        value,
+        confidence: confidence.to_string(),
+        reason: reason.to_string(),
+    });
+}
+
+fn build_invoice_suggestions(text: &str) -> Vec<InvoiceFieldSuggestion> {
+    let lines = text.lines().collect::<Vec<_>>();
+    let mut suggestions = Vec::new();
+
+    if let Some(supplier_name) = find_labeled_line_value(
+        &lines,
+        &["supplier", "vendor", "from", "billed by", "seller"],
+    )
+    .or_else(|| first_meaningful_supplier_line(&lines))
+    {
+        push_suggestion(
+            &mut suggestions,
+            "supplierName",
+            "Supplier",
+            supplier_name,
+            "medium",
+            "Taken from the supplier header or first likely supplier line. Please match it against your saved supplier list.",
+        );
+    }
+
+    if let Some(invoice_number) = find_labeled_line_value(
+        &lines,
+        &[
+            "invoice number",
+            "invoice no",
+            "invoice #",
+            "inv no",
+            "inv #",
+        ],
+    ) {
+        push_suggestion(
+            &mut suggestions,
+            "invoiceNumber",
+            "Invoice number",
+            truncate_chars(&invoice_number, 80),
+            "high",
+            "Found next to an invoice number label.",
+        );
+    }
+
+    if let Some(invoice_date) = find_labeled_line_value(&lines, &["invoice date", "date"])
+        .and_then(|value| parse_date_candidate(&value).or_else(|| find_first_date(&value)))
+        .or_else(|| find_first_date(text))
+    {
+        push_suggestion(
+            &mut suggestions,
+            "invoiceDate",
+            "Invoice date",
+            invoice_date,
+            "medium",
+            "Found near a date label or the first readable date in the document text.",
+        );
+    }
+
+    if let Some(net_amount) = find_labeled_amount(&lines, &["subtotal", "sub total", "net amount"])
+    {
+        push_suggestion(
+            &mut suggestions,
+            "netAmount",
+            "Net amount",
+            format!("{net_amount:.2}"),
+            "medium",
+            "Found next to a subtotal or net amount label.",
+        );
+    }
+
+    if let Some(vat_amount) = find_labeled_amount(&lines, &["vat", "tax"]) {
+        push_suggestion(
+            &mut suggestions,
+            "vatAmount",
+            "VAT amount",
+            format!("{vat_amount:.2}"),
+            "medium",
+            "Found next to a VAT or tax label.",
+        );
+    }
+
+    if let Some(total_amount) =
+        find_labeled_amount(&lines, &["grand total", "amount due", "total due", "total"])
+    {
+        push_suggestion(
+            &mut suggestions,
+            "totalCost",
+            "Total amount",
+            format!("{total_amount:.2}"),
+            "high",
+            "Found next to a total or amount due label. Please check it against the document before saving.",
+        );
+    }
+
+    if let Some(notes) = build_notes_suggestion(&lines) {
+        push_suggestion(
+            &mut suggestions,
+            "notes",
+            "Description / notes",
+            notes,
+            "low",
+            "Built from a few readable document lines to help you review faster. Please edit it if needed.",
+        );
+    }
+
+    suggestions
+}
+
+fn read_invoice_document_inner(
+    paths: &AppPaths,
+    request: &InvoiceReadRequest,
+) -> Result<InvoiceReadResult, String> {
+    let (bytes, file_name, mime_type) = load_invoice_read_bytes(paths, request)?;
+    let kind = detect_invoice_read_kind(&file_name, &mime_type)?;
+    let mut limitations = vec![
+        "Nothing is saved or changed by OCR alone. You must review every suggested value before you apply or save it.".to_string(),
+        "Optional cloud AI review is disabled in this release. This app does not store or back up any AI API key.".to_string(),
+    ];
+
+    let (provider, raw_text) = match kind {
+        InvoiceReadKind::Pdf => (
+            "local_pdf_text".to_string(),
+            pdf_extract::extract_text_from_mem(&bytes).map_err(|e| {
+                format!("This PDF could not be read locally. If it is a scanned PDF image, try a clear PNG or JPG photo instead. Technical detail: {e}")
+            })?,
+        ),
+        InvoiceReadKind::Png | InvoiceReadKind::Jpeg => {
+            limitations.push("Image OCR uses the local Windows OCR capability in the desktop app when available.".to_string());
+            (
+                "windows_local_ocr".to_string(),
+                extract_image_text(paths, &file_name, &bytes)?,
+            )
+        }
+    };
+
+    if kind == InvoiceReadKind::Pdf {
+        limitations.push("PDF reading in this release works best when the PDF already contains selectable text. Scanned image-only PDFs may return little or no text.".to_string());
+    }
+
+    let mut warnings = Vec::new();
+    let normalized_text = normalize_invoice_text(&raw_text);
+    let suggestions = build_invoice_suggestions(&normalized_text);
+    if normalized_text.is_empty() {
+        warnings.push(
+            "No readable text was found. If this is a scanned PDF, try a clear PNG or JPG photo in the Windows desktop app."
+                .to_string(),
+        );
+    }
+    let extracted_text = if normalized_text.chars().count() > MAX_INVOICE_EXTRACT_TEXT_CHARS {
+        warnings.push("Only the first part of the extracted text is shown here so the review stays manageable.".to_string());
+        truncate_chars(&normalized_text, MAX_INVOICE_EXTRACT_TEXT_CHARS)
+    } else {
+        normalized_text
+    };
+    let message = if extracted_text.is_empty() {
+        "The file was checked, but no readable invoice text was found.".to_string()
+    } else if suggestions.is_empty() {
+        "The file text was read, but no invoice fields were confidently recognised. Please review the raw text below.".to_string()
+    } else {
+        format!(
+            "Read {} suggestion(s). Please check the document carefully before applying any value.",
+            suggestions.len()
+        )
+    };
+
+    Ok(InvoiceReadResult {
+        source_file_name: file_name,
+        mime_type,
+        provider,
+        message,
+        extracted_text,
+        suggestions,
+        warnings,
+        limitations,
+        ai: default_invoice_ai_status(),
     })
 }
 
@@ -1489,6 +2203,15 @@ fn import_invoice_document_bytes(
 }
 
 #[tauri::command]
+fn read_invoice_document(
+    app: AppHandle,
+    request: InvoiceReadRequest,
+) -> Result<InvoiceReadResult, String> {
+    let paths = ensure_storage_and_schema(&app)?;
+    read_invoice_document_inner(&paths, &request)
+}
+
+#[tauri::command]
 fn open_invoice_document(
     app: AppHandle,
     relative_path: String,
@@ -1563,6 +2286,7 @@ pub fn run() {
             save_live_state_to_sqlite,
             import_browser_backup_into_sqlite,
             import_invoice_document_bytes,
+            read_invoice_document,
             open_invoice_document,
             remove_invoice_document,
             export_sqlite_backup,
@@ -1872,5 +2596,73 @@ mod tests {
                 .exists()
         );
         assert!(Path::new(&result.safety_backup_path).exists());
+    }
+
+    #[test]
+    fn invoice_read_kind_accepts_required_formats() {
+        assert!(matches!(
+            detect_invoice_read_kind("invoice.pdf", "application/pdf"),
+            Ok(InvoiceReadKind::Pdf)
+        ));
+        assert!(matches!(
+            detect_invoice_read_kind("invoice.png", ""),
+            Ok(InvoiceReadKind::Png)
+        ));
+        assert!(matches!(
+            detect_invoice_read_kind("invoice.jpeg", ""),
+            Ok(InvoiceReadKind::Jpeg)
+        ));
+        assert!(detect_invoice_read_kind("invoice.tif", "image/tiff").is_err());
+    }
+
+    #[test]
+    fn invoice_suggestions_extract_common_fields() {
+        let text = "\
+ACME Mining Supplies
+Invoice Number: INV-2026-0099
+Invoice Date: 10/09/2026
+Subtotal: 1,250.00
+VAT: 187.50
+Total: 1,437.50
+Wheel bearing service for CAT loader";
+
+        let suggestions = build_invoice_suggestions(text);
+
+        assert_eq!(suggestions[0].field, "supplierName");
+        assert_eq!(suggestions[1].field, "invoiceNumber");
+        assert_eq!(suggestions[1].value, "INV-2026-0099");
+        assert_eq!(suggestions[2].field, "invoiceDate");
+        assert_eq!(suggestions[2].value, "2026-09-10");
+        assert!(suggestions
+            .iter()
+            .any(|item| item.field == "netAmount" && item.value == "1250.00"));
+        assert!(suggestions
+            .iter()
+            .any(|item| item.field == "vatAmount" && item.value == "187.50"));
+        assert!(suggestions
+            .iter()
+            .any(|item| item.field == "totalCost" && item.value == "1437.50"));
+    }
+
+    #[test]
+    fn invoice_read_rejects_oversized_files_and_keeps_state_keys_unchanged() {
+        let paths = temp_app_paths("ocr-size-limit");
+        let request = InvoiceReadRequest {
+            relative_path: None,
+            file_name: Some("invoice.pdf".to_string()),
+            mime_type: Some("application/pdf".to_string()),
+            data_base64: Some(base64::engine::general_purpose::STANDARD.encode(vec![
+                b'a';
+                MAX_INVOICE_READ_BYTES
+                    + 1
+            ])),
+        };
+
+        let err =
+            read_invoice_document_inner(&paths, &request).expect_err("should reject big file");
+        assert!(err.contains("too large"));
+        assert!(!STATE_KEYS
+            .iter()
+            .any(|key| key.contains("api") || key.contains("ocr")));
     }
 }
