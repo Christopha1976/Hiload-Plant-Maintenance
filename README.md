@@ -9,12 +9,14 @@ This repository now has **two ways** to run:
 
 - In the **Windows desktop app**, SQLite is now the **live day-to-day data store**.
 - On desktop startup, the app loads Sites, Plant, Hires, Maintenance, Suppliers, Invoices, invoice documents, meters, service settings, rate models, alerts, and site totals from SQLite.
+- In the **Windows desktop app**, invoice attachments are copied into the app-managed documents folder so they survive restarts and can be backed up safely.
 - Normal add/edit/delete/import/reset actions in desktop mode now save back to SQLite automatically.
 - In **browser mode**, the app still uses normal browser local storage and does not depend on Tauri or SQLite.
 - **Help → Desktop / Database** now lets you:
   - reload live data from SQLite
   - import a browser `.json` backup into SQLite and refresh the visible screens
-  - create a SQLite backup copy
+  - create a dated desktop backup folder containing the SQLite database, managed invoice documents, and a manifest
+  - restore a previous desktop backup folder after creating an automatic safety backup first
 
 ## 2) One-time Windows prerequisites
 
@@ -83,8 +85,10 @@ After build, installer files are in:
 5. Or click **Import Browser Backup into SQLite** and select your `.json` backup.
 6. The desktop app will reload the visible screens from SQLite so your plants and invoices appear straight away.
 7. Use **Reload live data from SQLite** any time you want to refresh the screen from the database.
-8. Use **Create SQLite backup copy** to create a backup of the desktop database.
-9. The screen shows where your database, documents folder, and backups folder are located.
+8. Use **Create desktop backup** to create a dated backup folder of the desktop database, managed invoice files, and manifest.
+9. Use **Restore desktop backup** to select one of those backup folders and replace the current desktop data after an automatic safety backup is created.
+10. The screen shows where your database, documents folder, and backups folder are located.
+11. Keep at least one backup copy outside the PC as well, for example on a USB drive, OneDrive, or another safe place.
 
 ## 8) Simple troubleshooting
 
@@ -92,8 +96,9 @@ After build, installer files are in:
 2. If Rust/C++ toolchain errors appear, re-check that Rust and **Desktop development with C++** are installed.
 3. If desktop window does not open, ensure WebView2 Runtime is installed.
 4. If import fails, verify you selected a valid app backup `.json` file.
-5. If the desktop app opens but you do not see data, open **Help → Desktop / Database** and confirm it says **Loaded live data from SQLite** or click **Reload live data from SQLite**.
-6. If build is slow, wait (first build can take a while).
+5. If a desktop attachment does not open, reopen the invoice and use **Replace document** to attach the file again.
+6. If the desktop app opens but you do not see data, open **Help → Desktop / Database** and confirm it says **Loaded live data from SQLite** or click **Reload live data from SQLite**.
+7. If build is slow, wait (first build can take a while).
 
 ---
 
@@ -103,4 +108,4 @@ You can still run the original app by opening:
 
 - `Hiload Plant Latest.html`
 
-No desktop installation is required for normal browser use. Browser mode keeps using browser local storage. The Windows desktop app uses SQLite for daily work, so keep your original JSON backup until you have tested the desktop version a few times successfully.
+No desktop installation is required for normal browser use. Browser mode keeps using browser local storage. The Windows desktop app uses SQLite for daily work and keeps real invoice files in its managed documents folder, so keep your original JSON backup until you have tested the desktop version a few times successfully and keep at least one desktop backup outside the PC.

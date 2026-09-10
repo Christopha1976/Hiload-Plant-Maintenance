@@ -426,10 +426,11 @@
               <div class="field">
                 <label for="inv-file">Invoice document (PDF or image)</label>
                 <input id="inv-file" name="file" type="file" accept="application/pdf,image/*" autocomplete="off" />
-                <small class="muted">Storage in the browser is limited. Large files may not be saved locally; invoice details will still be saved.</small>
+                <small class="muted" id="inv-file-help">Storage in the browser is limited. Large files may not be saved locally; invoice details will still be saved.</small>
               </div>
               <div id="inv-file-meta" class="muted">No file selected.</div>
               <div id="inv-file-preview" class="stack"></div>
+              <p class="muted" id="invoice-status-message">Invoice attachment status messages will appear here.</p>
               <div class="inline" style="flex-wrap:wrap;gap:.75rem">
                 <div class="field" style="min-width:220px;flex:1 1 220px">
                   <label for="inv-supplier">Supplier</label>
@@ -664,7 +665,7 @@
               </div>
               <div>
                 <strong>7) Invoice Inbox (manual pre-conversion)</strong>
-                <p class="muted" style="margin:.25rem 0 0">Invoices → New Invoice lets you upload a PDF/image and capture supplier, invoice number/date, plant, maintenance type and amount fields. Review in Invoice Inbox, then click Post to maintenance manually. Email import, OCR and AI extraction are not included yet and will come later in desktop conversion.</p>
+                <p class="muted" style="margin:.25rem 0 0">Invoices → New Invoice lets you attach a PDF/image and capture supplier, invoice number/date, plant, maintenance type and amount fields. In the Windows desktop app, attachments are copied into the app’s documents folder so they survive restarts and backups. Review in Invoice Inbox, then click Post to maintenance manually. Email import, OCR and AI extraction are not included yet and will come later in desktop conversion.</p>
               </div>
               <div>
                 <strong>Printing</strong>
@@ -672,14 +673,14 @@
               </div>
               <div>
                 <strong>Data storage</strong>
-                <p class="muted" style="margin:.25rem 0 0">Browser mode still saves data in your browser on this device. In the Windows desktop app, SQLite now becomes the live day-to-day data store after startup, import or migration. Use Export to save a .json backup, Import to restore, or Reset to clear this device.</p>
+                <p class="muted" style="margin:.25rem 0 0">Browser mode still saves data in your browser on this device. In the Windows desktop app, SQLite is the live day-to-day data store and invoice attachments are kept as real files in the app’s documents folder. Use Help → Desktop / Database to create a combined desktop backup or restore one. Keep at least one backup copy outside this PC as well, for example on a USB drive or OneDrive.</p>
               </div>
             </div>
           </div>
 
           <div class="card">
             <h3>Export / Import</h3>
-            <p class="muted">Export saves a .json file containing all Sites, Plant, Hires, Maintenance, Invoices, invoice document references, Month‑end readings, Service settings and Lifetime totals. In desktop mode, export reflects the current live SQLite-backed data that is loaded in the app. Import loads a previously exported file. Importing will replace current data on this device.</p>
+            <p class="muted">Export saves a .json file containing all Sites, Plant, Hires, Maintenance, Invoices, invoice document references, Month‑end readings, Service settings and Lifetime totals. In desktop mode, the real invoice files are protected by the Desktop / Database backup feature instead. Import loads a previously exported file. Importing will replace current data on this device.</p>
             <div class="actions">
               <button id="export-data-btn" class="btn">Export data (.json)</button>
               <button id="import-data-btn" class="btn primary" aria-controls="import-file">Import data (.json)</button>
@@ -711,8 +712,10 @@
               <div class="actions">
                 <button id="desktop-refresh-btn" type="button" class="btn">Reload live data from SQLite</button>
                 <button id="desktop-import-btn" type="button" class="btn primary">Import Browser Backup into SQLite</button>
-                <button id="desktop-export-db-btn" type="button" class="btn">Create SQLite backup copy</button>
+                <button id="desktop-export-db-btn" type="button" class="btn">Create desktop backup</button>
+                <button id="desktop-restore-db-btn" type="button" class="btn">Restore desktop backup</button>
               </div>
+              <p class="muted">Desktop backups are saved as dated folders in the backup folder. Each backup contains the SQLite database, managed invoice documents, and a manifest file. Keep at least one backup outside this PC as well, for example on a USB drive, OneDrive, or another safe place.</p>
               <p class="muted" id="desktop-db-message">Desktop mode uses SQLite as the live data store after it loads or migrates your data. Browser mode keeps using browser storage as before.</p>
             </div>
           </div>
@@ -1912,8 +1915,10 @@
         // ---------- Invoice inbox ----------
         var invoiceForm = byId('invoice-form');
         var invoiceFileInput = byId('inv-file');
+        var invoiceFileHelp = byId('inv-file-help');
         var invoiceFileMeta = byId('inv-file-meta');
         var invoiceFilePreview = byId('inv-file-preview');
+        var invoiceStatusMessage = byId('invoice-status-message');
         var invoiceTableBody = $('#invoice-table tbody');
         var invoiceFilterStatusSel = byId('inv-filter-status');
         var invoiceFilterSupplierSel = byId('inv-filter-supplier');
@@ -1922,6 +1927,10 @@
         var invoiceSupplierForm = byId('invoice-supplier-form');
         var invoiceSupplierList = byId('invoice-supplier-list');
         var invoiceFilter = { status: 'all', supplierId: 'all', plantId: 'all' };
+
+        function setInvoiceStatusText(text){
+          if (invoiceStatusMessage) invoiceStatusMessage.textContent = String(text || '');
+        }
 
         function ensureInvoiceStateShape(){
           if (!Array.isArray(state.invoices)) state.invoices = [];
@@ -1952,8 +1961,8 @@
             }
             if (!Array.isArray(next.duplicateOfIds)) next.duplicateOfIds = [];
             if (typeof next.isDuplicateNumber !== 'boolean') next.isDuplicateNumber = next.duplicateOfIds.length > 0;
-            if (typeof next.hasDocument !== 'boolean') next.hasDocument = !!(state.invoiceDocs[next.id] && state.invoiceDocs[next.id].dataUrl);
-            if (!next.docStorageStatus) next.docStorageStatus = next.hasDocument ? 'stored' : 'not_stored';
+            if (typeof next.hasDocument !== 'boolean') next.hasDocument = !!(state.invoiceDocs[next.id] && (state.invoiceDocs[next.id].managedRelativePath || state.invoiceDocs[next.id].dataUrl));
+            if (!next.docStorageStatus) next.docStorageStatus = next.hasDocument ? ((state.invoiceDocs[next.id] && state.invoiceDocs[next.id].managedRelativePath) ? 'desktop_managed' : 'stored') : 'not_stored';
             return next;
           });
           if (changed) save(LS_KEYS.invoices, state.invoices);
@@ -1972,10 +1981,15 @@
         }
         function invoiceHasStoredDocument(inv){
           var doc = state.invoiceDocs[inv.id];
-          return !!(doc && doc.dataUrl && String(doc.dataUrl).indexOf('data:') === 0);
+          return !!(doc && (
+            (doc.managedRelativePath && String(doc.managedRelativePath).trim()) ||
+            (doc.dataUrl && String(doc.dataUrl).indexOf('data:') === 0)
+          ));
         }
         function invoiceDocumentStatusText(inv){
-          if (invoiceHasStoredDocument(inv)) return 'Stored';
+          var doc = state.invoiceDocs[inv.id];
+          if (doc && doc.managedRelativePath) return 'Desktop file saved';
+          if (invoiceHasStoredDocument(inv)) return 'Stored in browser data';
           if (inv.filename) return 'Metadata only';
           return 'No file';
         }
@@ -2052,6 +2066,33 @@
           if (invoiceFilePreview) invoiceFilePreview.innerHTML = '';
         }
 
+        function arrayBufferToBase64(buffer){
+          var bytes = new Uint8Array(buffer || new ArrayBuffer(0));
+          var chunkSize = 0x8000;
+          var parts = [];
+          for (var i = 0; i < bytes.length; i += chunkSize) {
+            var chunk = bytes.subarray(i, i + chunkSize);
+            parts.push(String.fromCharCode.apply(null, chunk));
+          }
+          return btoa(parts.join(''));
+        }
+
+        function cloneData(value){
+          return JSON.parse(JSON.stringify(value));
+        }
+
+        function buildDesktopStateDataBlock(){
+          var data = cloneData(buildCurrentStateDataBlock());
+          var docs = data && data.hiph_invoice_docs && typeof data.hiph_invoice_docs === 'object' ? data.hiph_invoice_docs : null;
+          if (docs) {
+            Object.keys(docs).forEach(function(invoiceId){
+              var item = docs[invoiceId];
+              if (item && item.managedRelativePath && item.dataUrl) delete item.dataUrl;
+            });
+          }
+          return data;
+        }
+
         function renderInvoiceFilePreview(file, dataUrl){
           if (invoiceFileMeta) invoiceFileMeta.textContent = file ? ('Selected: ' + file.name + ' (' + Math.round((file.size || 0) / 1024) + ' KB)') : 'No file selected.';
           if (!invoiceFilePreview) return;
@@ -2065,6 +2106,65 @@
           } else {
             invoiceFilePreview.innerHTML = '<div class="muted">Preview is not available for this file type in the current browser.</div>';
           }
+        }
+
+        function importDesktopInvoiceAttachment(invoiceId, file){
+          var invoke = getTauriInvoke();
+          if (!invoke) return Promise.reject(new Error('Desktop attachment saving is not available here.'));
+          return file.arrayBuffer().then(function(buffer){
+            return invoke('import_invoice_document_bytes', {
+              invoiceId: invoiceId,
+              fileName: file.name || 'invoice-document',
+              mimeType: String(file.type || ''),
+              dataBase64: arrayBufferToBase64(buffer)
+            });
+          }).then(function(result){
+            setInvoiceStatusText((result && result.message ? result.message : 'Attachment saved.') + ' File: ' + (result && result.fullPath ? result.fullPath : ''));
+            return {
+              managedRelativePath: result && result.relativePath ? result.relativePath : '',
+              fileName: result && result.fileName ? result.fileName : (file.name || ''),
+              mimeType: result && result.mimeType ? result.mimeType : String(file.type || ''),
+              size: result && typeof result.sizeBytes === 'number' ? result.sizeBytes : (file.size || 0),
+              sha256: result && result.sha256 ? result.sha256 : '',
+              storedAt: new Date().toISOString(),
+              storageKind: 'desktop_managed_file'
+            };
+          });
+        }
+
+        function openInvoiceDocument(inv){
+          var doc = inv && state.invoiceDocs ? state.invoiceDocs[inv.id] : null;
+          if (!doc) { alert('No invoice attachment is saved for this invoice yet.'); return Promise.resolve(false); }
+          if (desktopIsTauri && doc.managedRelativePath) {
+            var invoke = getTauriInvoke();
+            if (!invoke) return Promise.resolve(false);
+            return invoke('open_invoice_document', { relativePath: doc.managedRelativePath }).then(function(result){
+              setInvoiceStatusText(result && result.message ? result.message : 'Attachment opened.');
+              return true;
+            }).catch(function(err){
+              var msg = 'Could not open the saved attachment. ' + ((err && err.message) ? err.message : String(err));
+              setInvoiceStatusText(msg);
+              alert(msg);
+              return false;
+            });
+          }
+          if (doc.dataUrl) {
+            window.open(doc.dataUrl, '_blank', 'noopener');
+            setInvoiceStatusText('Opened the older browser-stored attachment in a new tab.');
+            return Promise.resolve(true);
+          }
+          alert('This invoice only has document details saved. Use Replace document to attach the real file.');
+          return Promise.resolve(false);
+        }
+
+        function removeManagedInvoiceAttachment(invoiceId, doc){
+          var invoke = getTauriInvoke();
+          if (!invoke || !doc || !doc.managedRelativePath) return Promise.resolve(null);
+          return invoke('remove_invoice_document', {
+            invoiceId: invoiceId,
+            relativePath: doc.managedRelativePath,
+            data: buildDesktopStateDataBlock()
+          });
         }
 
         function createInvoiceRecord(values){
@@ -2094,22 +2194,27 @@
 
         function saveInvoiceRecordWithDocument(record, documentPayload){
           var storageWarning = '';
-          if (documentPayload && documentPayload.dataUrl) {
+          if (documentPayload && (documentPayload.dataUrl || documentPayload.managedRelativePath)) {
             state.invoiceDocs[record.id] = {
-              dataUrl: documentPayload.dataUrl,
+              dataUrl: documentPayload.dataUrl || '',
               fileName: documentPayload.fileName || record.filename || '',
               mimeType: documentPayload.mimeType || record.fileMimeType || '',
               size: documentPayload.size || 0,
-              storedAt: new Date().toISOString()
+              storedAt: documentPayload.storedAt || new Date().toISOString(),
+              managedRelativePath: documentPayload.managedRelativePath || '',
+              sha256: documentPayload.sha256 || '',
+              storageKind: documentPayload.storageKind || (documentPayload.managedRelativePath ? 'desktop_managed_file' : 'browser_data_url')
             };
             if (persistInvoiceDocs()) {
               record.hasDocument = true;
-              record.docStorageStatus = 'stored';
+              record.docStorageStatus = documentPayload.managedRelativePath ? 'desktop_managed' : 'stored';
             } else {
               delete state.invoiceDocs[record.id];
               record.hasDocument = false;
               record.docStorageStatus = 'not_stored';
-              storageWarning = 'Document could not be stored locally (browser storage limit). Invoice details were saved.';
+              storageWarning = documentPayload.managedRelativePath
+                ? 'The desktop file was saved, but the invoice record could not be updated on screen. Please reopen the invoice and attach it again if needed.'
+                : 'Document could not be stored locally (browser storage limit). Invoice details were saved.';
             }
           } else if (!record.hasDocument) {
             record.docStorageStatus = record.filename ? 'not_stored' : 'no_file';
@@ -2238,20 +2343,57 @@
           var idx = state.invoices.findIndex(function(inv){ return inv.id === invoiceId; });
           if (idx < 0) return;
           var inv = state.invoices[idx];
+          var existingDoc = state.invoiceDocs[invoiceId];
           if (inv.status === 'posted') {
             if (!confirm('This posted invoice has a linked maintenance cost entry. Deleting it will also remove that maintenance entry. Continue?')) return;
-            state.maintenance = state.maintenance.filter(function(m){ return m.invoiceId !== inv.id; });
-            save(LS_KEYS.maintenance, state.maintenance);
           } else {
             if (!confirm('Delete this pending invoice record?')) return;
           }
-          state.invoices.splice(idx, 1);
-          delete state.invoiceDocs[invoiceId];
-          save(LS_KEYS.invoices, state.invoices);
-          persistInvoiceDocs();
-          renderMaintenanceLists();
-          renderMaintenanceReportFilters();
-          refreshInvoiceUi();
+          var continueDelete = function(){
+            var previousInvoices = state.invoices.slice();
+            var previousMaintenance = state.maintenance.slice();
+            var previousDoc = existingDoc ? Object.assign({}, existingDoc) : null;
+            if (inv.status === 'posted') {
+              state.maintenance = state.maintenance.filter(function(m){ return m.invoiceId !== inv.id; });
+              save(LS_KEYS.maintenance, state.maintenance);
+            }
+            state.invoices.splice(idx, 1);
+            delete state.invoiceDocs[invoiceId];
+            inv.hasDocument = false;
+            inv.docStorageStatus = 'no_file';
+            save(LS_KEYS.invoices, state.invoices);
+            if (!persistInvoiceDocs()) {
+              state.invoices = previousInvoices;
+              state.maintenance = previousMaintenance;
+              if (previousDoc) state.invoiceDocs[invoiceId] = previousDoc;
+              saveLocalOnly(LS_KEYS.invoices, state.invoices);
+              saveLocalOnly(LS_KEYS.maintenance, state.maintenance);
+              saveLocalOnly(LS_KEYS.invoiceDocs, state.invoiceDocs);
+              setInvoiceStatusText('The invoice was not deleted because the document change could not be saved safely. Please try again.');
+              alert('The invoice was not deleted because the document change could not be saved safely. Please try again.');
+              return;
+            }
+            renderMaintenanceLists();
+            renderMaintenanceReportFilters();
+            refreshInvoiceUi();
+            setInvoiceStatusText('Invoice deleted.');
+          };
+
+          if (desktopIsTauri && existingDoc && existingDoc.managedRelativePath) {
+            removeManagedInvoiceAttachment(invoiceId, existingDoc)
+              .then(function(result){
+                if (result) setInvoiceStatusText(result.message || 'Attachment removed.');
+                continueDelete();
+              })
+              .catch(function(err){
+                var msg = 'The invoice was not deleted because its desktop attachment could not be removed safely. ' + ((err && err.message) ? err.message : String(err));
+                setInvoiceStatusText(msg);
+                alert(msg);
+              });
+            return;
+          }
+
+          continueDelete();
         }
 
         function openInvoiceReviewModal(invoiceId){
@@ -2280,9 +2422,10 @@
               '<div class="field" style="min-width:180px;flex:1 1 180px"><label for="m-inv-total">Total amount</label><input id="m-inv-total" type="number" step="0.01" min="0" value="'+escapeAttr(inv.totalCost)+'"'+(posted ? ' disabled' : '')+' autocomplete="off" inputmode="decimal" /></div>' +
             '</div>' +
             (posted
-              ? '<p class="muted">Financial and assignment fields are locked because this invoice is posted. You may edit notes only, or delete the invoice.</p>'
-              : '<div class="field"><label for="m-inv-file">Replace document (optional)</label><input id="m-inv-file" type="file" accept="application/pdf,image/*" autocomplete="off" /></div>'
+              ? '<p class="muted">Financial and assignment fields are locked because this invoice is posted. You may still open, replace, or remove the attachment.</p>'
+              : ''
             ) +
+            '<div class="field"><label for="m-inv-file">'+(doc ? 'Replace document (optional)' : 'Attach document (optional)')+'</label><input id="m-inv-file" type="file" accept="application/pdf,image/*" autocomplete="off" /></div>' +
             '<div id="m-inv-doc-actions" class="actions" style="margin-top:.25rem"></div>';
 
           var reviewSupplier = byId('m-inv-supplier');
@@ -2314,14 +2457,84 @@
           }
 
           if (docActions) {
-            if (doc && doc.dataUrl) {
+            if (doc && doc.managedRelativePath && desktopIsTauri) {
               docActions.innerHTML =
-                '<a class="btn" href="'+escapeAttr(doc.dataUrl)+'" target="_blank" rel="noopener">Open document</a>' +
+                '<button type="button" class="btn" id="m-inv-open-doc">Open document</button>' +
+                '<button type="button" class="btn danger" id="m-inv-remove-doc">Remove attachment</button>' +
+                '<span class="muted">Saved in the desktop documents folder.</span>';
+            } else if (doc && doc.managedRelativePath) {
+              docActions.innerHTML = '<span class="muted">This attachment is saved in the Windows desktop documents folder. Open this invoice in the desktop app to access it.</span>';
+            } else if (doc && doc.dataUrl) {
+              docActions.innerHTML =
+                '<button type="button" class="btn" id="m-inv-open-doc">Open document</button>' +
                 '<a class="btn" href="'+escapeAttr(doc.dataUrl)+'" download="'+escapeAttr(doc.fileName || inv.filename || 'invoice-document')+'">Download</a>' +
-                '<span class="muted">Stored locally</span>';
+                '<span class="muted">This is an older browser-stored attachment. Use Replace document to move it into the desktop documents folder.</span>';
             } else {
-              docActions.innerHTML = '<span class="muted">No locally stored document is available for preview/download.</span>';
+              docActions.innerHTML = '<span class="muted">No attachment file is saved for this invoice yet.</span>';
             }
+          }
+
+          var openDocBtn = byId('m-inv-open-doc');
+          if (openDocBtn) {
+            openDocBtn.addEventListener('click', function(){
+              openInvoiceDocument(inv);
+            });
+          }
+          var removeDocBtn = byId('m-inv-remove-doc');
+          if (removeDocBtn) {
+            removeDocBtn.addEventListener('click', function(){
+              if (!doc) return;
+              if (!confirm('Remove this invoice attachment now?')) return;
+              if (doc.managedRelativePath && desktopIsTauri) {
+                removeManagedInvoiceAttachment(inv.id, doc).then(function(result){
+                  var previousInv = Object.assign({}, state.invoices[idx] || inv);
+                  var previousDoc = state.invoiceDocs[inv.id] ? Object.assign({}, state.invoiceDocs[inv.id]) : null;
+                  delete state.invoiceDocs[inv.id];
+                  inv.hasDocument = false;
+                  inv.docStorageStatus = 'no_file';
+                  state.invoices[idx] = inv;
+                  save(LS_KEYS.invoices, state.invoices);
+                  if (!persistInvoiceDocs()) {
+                    if (previousDoc) state.invoiceDocs[inv.id] = previousDoc;
+                    state.invoices[idx] = previousInv;
+                    saveLocalOnly(LS_KEYS.invoices, state.invoices);
+                    saveLocalOnly(LS_KEYS.invoiceDocs, state.invoiceDocs);
+                    var revertMsg = 'The attachment file was removed, but the invoice record could not be updated safely. Please reopen the invoice and try again.';
+                    setInvoiceStatusText(revertMsg);
+                    alert(revertMsg);
+                    return;
+                  }
+                  refreshInvoiceUi();
+                  if (result && result.message) setInvoiceStatusText(result.message);
+                  modal.close('submit');
+                }).catch(function(err){
+                  var msg = 'The attachment was not removed. ' + ((err && err.message) ? err.message : String(err));
+                  setInvoiceStatusText(msg);
+                  alert(msg);
+                });
+              } else {
+                var previousInvBrowser = Object.assign({}, state.invoices[idx] || inv);
+                var previousBrowserDoc = state.invoiceDocs[inv.id] ? Object.assign({}, state.invoiceDocs[inv.id]) : null;
+                delete state.invoiceDocs[inv.id];
+                inv.hasDocument = false;
+                inv.docStorageStatus = 'no_file';
+                state.invoices[idx] = inv;
+                save(LS_KEYS.invoices, state.invoices);
+                if (!persistInvoiceDocs()) {
+                  if (previousBrowserDoc) state.invoiceDocs[inv.id] = previousBrowserDoc;
+                  state.invoices[idx] = previousInvBrowser;
+                  saveLocalOnly(LS_KEYS.invoices, state.invoices);
+                  saveLocalOnly(LS_KEYS.invoiceDocs, state.invoiceDocs);
+                  var browserMsg = 'The attachment could not be removed safely. Please try again.';
+                  setInvoiceStatusText(browserMsg);
+                  alert(browserMsg);
+                  return;
+                }
+                refreshInvoiceUi();
+                setInvoiceStatusText('Attachment removed from this invoice.');
+                modal.close('submit');
+              }
+            });
           }
 
           modalSubmit.textContent = posted ? 'Save notes' : 'Save changes';
@@ -2338,11 +2551,14 @@
             var totalCost = parseRequiredAmount(byId('m-inv-total').value);
 
             if (!notes) { alert('Description / notes are required.'); return; }
-            if (posted) {
+            var replacementInput = byId('m-inv-file');
+            var replacement = replacementInput && replacementInput.files && replacementInput.files[0] ? replacementInput.files[0] : null;
+            if (posted && !replacement) {
               inv.notes = notes;
               state.invoices[idx] = inv;
               save(LS_KEYS.invoices, state.invoices);
               refreshInvoiceUi();
+              setInvoiceStatusText('Invoice notes saved.');
               modal.close('submit');
               return;
             }
@@ -2386,14 +2602,50 @@
               modal.close('submit');
             }
 
-            var replacementInput = byId('m-inv-file');
-            var replacement = replacementInput && replacementInput.files && replacementInput.files[0] ? replacementInput.files[0] : null;
             if (!replacement) {
               applyInvoiceUpdate(null, '');
+              setInvoiceStatusText('Invoice changes saved.');
               return;
             }
             var mime = String(replacement.type || '');
             if (!(mime === 'application/pdf' || mime.indexOf('image/') === 0)) { alert('Only PDF and image files are supported.'); return; }
+            if (desktopIsTauri) {
+              var previousDoc = doc ? Object.assign({}, doc) : null;
+              importDesktopInvoiceAttachment(inv.id, replacement).then(function(documentPayload){
+                var nextDoc = {
+                  fileName: documentPayload.fileName || '',
+                  mimeType: documentPayload.mimeType || '',
+                  size: documentPayload.size || 0,
+                  storedAt: documentPayload.storedAt || new Date().toISOString(),
+                  managedRelativePath: documentPayload.managedRelativePath || '',
+                  sha256: documentPayload.sha256 || '',
+                  storageKind: documentPayload.storageKind || 'desktop_managed_file'
+                };
+                state.invoiceDocs[inv.id] = nextDoc;
+                if (!persistInvoiceDocs()) {
+                  if (previousDoc) state.invoiceDocs[inv.id] = previousDoc;
+                  else delete state.invoiceDocs[inv.id];
+                  saveLocalOnly(LS_KEYS.invoiceDocs, state.invoiceDocs);
+                  removeManagedInvoiceAttachment(inv.id, nextDoc).catch(function(){ return null; });
+                  var persistMsg = 'The current attachment was kept because the invoice record could not be updated safely after saving the new file.';
+                  setInvoiceStatusText(persistMsg);
+                  alert(persistMsg);
+                  return;
+                }
+                applyInvoiceUpdate(documentPayload, 'stored');
+                setInvoiceStatusText('Attachment replaced and saved in the desktop documents folder.');
+                if (previousDoc && previousDoc.managedRelativePath) {
+                  removeManagedInvoiceAttachment(inv.id, previousDoc).then(function(result){
+                    if (result && result.message && result.fileDeleted === false) setInvoiceStatusText(result.message);
+                  }).catch(function(){ return null; });
+                }
+              }).catch(function(err){
+                var msg = 'The current attachment was kept because the replacement file could not be saved. ' + ((err && err.message) ? err.message : String(err));
+                setInvoiceStatusText(msg);
+                alert(msg);
+              });
+              return;
+            }
             var reader = new FileReader();
             reader.onerror = function(){
               applyInvoiceUpdate({ fileName: replacement.name, mimeType: mime }, 'not_stored');
@@ -2508,11 +2760,13 @@
             if (vatAmount !== null && !isFinite(vatAmount)) { alert('VAT amount must be a non-negative number.'); return; }
             if (!isFinite(totalCost)) { alert('Total amount must be a non-negative number.'); return; }
 
+            var invoiceId = uid('inv_');
             var duplicates = findDuplicateInvoices(supplierId, invoiceNumber, '');
             if (duplicates.length && !confirm('Another invoice with this supplier and invoice number already exists. Save this duplicate anyway?')) return;
 
             function finalize(documentPayload){
               var record = createInvoiceRecord({
+                id: invoiceId,
                 supplierId: supplierId,
                 invoiceNumber: invoiceNumber,
                 invoiceDate: invoiceDate,
@@ -2525,19 +2779,32 @@
                 filename: documentPayload ? documentPayload.fileName : (file ? file.name : ''),
                 fileMimeType: documentPayload ? documentPayload.mimeType : (file ? String(file.type || '') : ''),
                 status: 'pending_review',
-                hasDocument: !!(documentPayload && documentPayload.dataUrl)
+                hasDocument: !!documentPayload
               });
               record.duplicateOfIds = duplicates.map(function(x){ return x.id; });
               record.isDuplicateNumber = duplicates.length > 0;
               var warning = saveInvoiceRecordWithDocument(record, documentPayload || null);
               invoiceForm.reset();
               resetInvoiceFileUi();
+               setInvoiceStatusText(warning || (documentPayload && documentPayload.managedRelativePath ? 'Invoice and desktop attachment saved.' : 'Invoice saved.'));
               if (warning) alert(warning);
             }
 
             if (!file) { finalize(null); return; }
             var mime = String(file.type || '');
             if (!(mime === 'application/pdf' || mime.indexOf('image/') === 0)) { alert('Only PDF and image files are supported.'); return; }
+            if (desktopIsTauri) {
+              importDesktopInvoiceAttachment(invoiceId, file)
+                .then(function(documentPayload){
+                  finalize(documentPayload);
+                })
+                .catch(function(err){
+                  var msg = 'The attachment could not be copied into the desktop documents folder, so the invoice was not changed. ' + ((err && err.message) ? err.message : String(err));
+                  setInvoiceStatusText(msg);
+                  alert(msg);
+                });
+              return;
+            }
             var reader = new FileReader();
             reader.onerror = function(){
               finalize({ fileName: file.name, mimeType: mime });
@@ -3710,12 +3977,14 @@
         var desktopRefreshBtn = byId('desktop-refresh-btn');
         var desktopImportBtn = byId('desktop-import-btn');
         var desktopExportDbBtn = byId('desktop-export-db-btn');
+        var desktopRestoreDbBtn = byId('desktop-restore-db-btn');
         var desktopIsTauri = false;
         var desktopStateReady = false;
         var desktopStateHydrating = false;
         var desktopSaveTimer = null;
         var desktopSaveChain = Promise.resolve();
         var desktopMessageText = '';
+        var desktopBackupsFolderPath = '';
 
         function getTauriInvoke(){
           if (!window || !window.__TAURI__ || !window.__TAURI__.core || typeof window.__TAURI__.core.invoke !== 'function') return null;
@@ -3742,6 +4011,7 @@
           if (desktopRefreshBtn) desktopRefreshBtn.disabled = !enabled;
           if (desktopImportBtn) desktopImportBtn.disabled = !enabled;
           if (desktopExportDbBtn) desktopExportDbBtn.disabled = !enabled;
+          if (desktopRestoreDbBtn) desktopRestoreDbBtn.disabled = !enabled;
         }
 
         function renderDesktopBrowserMode(){
@@ -3752,6 +4022,7 @@
           if (desktopDbStatus) desktopDbStatus.textContent = 'SQLite is available only when this app runs as the Tauri Windows desktop app.';
           if (desktopDocsStatus) desktopDocsStatus.textContent = 'Documents folder is available only in desktop mode.';
           if (desktopBackupStatus) desktopBackupStatus.textContent = 'SQLite backup folder is available only in desktop mode.';
+          if (invoiceFileHelp) invoiceFileHelp.textContent = 'Storage in the browser is limited. Large files may not be saved locally; invoice details will still be saved.';
           setDesktopMessageText('You can keep using this browser app as normal. To use SQLite, open this same app through the Windows desktop app.');
         }
 
@@ -3766,17 +4037,19 @@
           setDesktopButtonState(false);
           return invoke('desktop_status').then(function(status){
             desktopIsTauri = true;
+            desktopBackupsFolderPath = status && status.backupsPath ? status.backupsPath : '';
             if (desktopModeText) desktopModeText.textContent = 'Desktop mode: Yes (Tauri app running).';
             if (desktopDbStatus) {
               desktopDbStatus.textContent = (status.databaseExists ? 'Ready' : 'Created now') + ': ' + status.databasePath +
                 (status.hasLiveData ? ' — Live SQLite data found (' + formatDesktopLiveCounts(status.liveCounts) + ')' : ' — No live SQLite records saved yet.');
             }
             if (desktopDocsStatus) {
-              desktopDocsStatus.textContent = (status.documentsExists ? 'Ready' : 'Created now') + ': ' + status.documentsPath;
+              desktopDocsStatus.textContent = (status.documentsExists ? 'Ready' : 'Created now') + ': ' + status.documentsPath + ' — invoice attachments are kept in the invoices subfolder here.';
             }
             if (desktopBackupStatus) {
-              desktopBackupStatus.textContent = (status.backupsExists ? 'Ready' : 'Created now') + ': ' + status.backupsPath;
+              desktopBackupStatus.textContent = (status.backupsExists ? 'Ready' : 'Created now') + ': ' + status.backupsPath + ' — each dated backup folder contains the database, documents, and manifest.';
             }
+            if (invoiceFileHelp) invoiceFileHelp.textContent = 'In the Windows desktop app, the selected PDF or image will be copied into this app’s managed documents folder when you save the invoice.';
             if (!desktopMessageText) {
               setDesktopMessageText('Desktop mode uses SQLite as the live data store after load, import or migration. Browser mode still uses browser storage.');
             } else if (desktopMessage) {
@@ -3793,7 +4066,7 @@
           var invoke = getTauriInvoke();
           if (!invoke || !desktopIsTauri || !desktopStateReady || desktopStateHydrating) return Promise.resolve(null);
           return invoke('save_live_state_to_sqlite', {
-            data: buildCurrentStateDataBlock(),
+            data: buildDesktopStateDataBlock(),
             source: source || 'desktop_app'
           }).then(function(result){
             setDesktopMessageText(successMessage || ((result && result.message) ? result.message : 'Saved to SQLite.'));
@@ -3910,7 +4183,7 @@
           setDesktopButtonState(false);
           invoke('export_sqlite_backup')
             .then(function(result){
-              var msg = (result && result.message ? result.message : 'SQLite backup created.') + ' File: ' + (result.backupPath || '');
+              var msg = (result && result.message ? result.message : 'Desktop backup created.') + ' Folder: ' + (result.backupPath || '') + (result && result.manifestPath ? ' Manifest: ' + result.manifestPath : '');
               setDesktopMessageText(msg);
               alert(msg);
               return refreshDesktopStatus();
@@ -3920,6 +4193,45 @@
               alert('SQLite backup failed: ' + ((err && err.message) ? err.message : String(err)));
               setDesktopButtonState(true);
             });
+        }
+
+        function restoreDesktopBackup(){
+          if (!desktopIsTauri) {
+            alert('Desktop restore is available only in the Windows desktop app.');
+            return;
+          }
+          var invoke = getTauriInvoke();
+          if (!invoke) { renderDesktopBrowserMode(); return; }
+          setDesktopButtonState(false);
+          invoke('plugin:dialog|open', {
+            options: {
+              directory: true,
+              multiple: false,
+              title: 'Choose a Hiload desktop backup folder',
+              defaultPath: desktopBackupsFolderPath || undefined
+            }
+          }).then(function(selected){
+            var backupPath = Array.isArray(selected) ? selected[0] : selected;
+            if (!backupPath) {
+              setDesktopButtonState(true);
+              return null;
+            }
+            if (!confirm('Restore this desktop backup now?\n\n' + backupPath + '\n\nThis will replace the current desktop SQLite data and managed invoice documents. The app will automatically create a safety backup first.')) {
+              setDesktopButtonState(true);
+              return null;
+            }
+            setDesktopMessageText('Checking the selected desktop backup and creating a safety backup first…');
+            return invoke('restore_desktop_backup', { backupPath: backupPath }).then(function(result){
+              var msg = (result && result.message ? result.message : 'Desktop restore completed.') + ' Safety backup: ' + (result && result.safetyBackupPath ? result.safetyBackupPath : '');
+              setDesktopMessageText(msg);
+              alert(msg);
+              return loadDesktopStateFromSqlite({ force: true });
+            });
+          }).catch(function(err){
+            renderDesktopError(err);
+            alert('Desktop restore failed: ' + ((err && err.message) ? err.message : String(err)));
+            setDesktopButtonState(true);
+          });
         }
 
         // ---------- Export / Import / Reset ----------
@@ -4247,6 +4559,7 @@
           if (desktopRefreshBtn && !desktopRefreshBtn._bound) { desktopRefreshBtn.addEventListener('click', function(){ loadDesktopStateFromSqlite({ force: true }); }); desktopRefreshBtn._bound = true; }
           if (desktopImportBtn && !desktopImportBtn._bound) { desktopImportBtn.addEventListener('click', importBrowserBackupIntoSqlite); desktopImportBtn._bound = true; }
           if (desktopExportDbBtn && !desktopExportDbBtn._bound) { desktopExportDbBtn.addEventListener('click', createSqliteBackupCopy); desktopExportDbBtn._bound = true; }
+          if (desktopRestoreDbBtn && !desktopRestoreDbBtn._bound) { desktopRestoreDbBtn.addEventListener('click', restoreDesktopBackup); desktopRestoreDbBtn._bound = true; }
 
           var hash = (location.hash || '').replace('#','');
           var mainId = (['hire','plant-sites','maintenance','invoices','reports','help'].indexOf(hash) >= 0) ? hash : 'hire';
