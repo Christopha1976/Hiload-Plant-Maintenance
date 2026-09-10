@@ -1,11 +1,14 @@
+use base64::Engine;
 use rusqlite::{params, Connection};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::process::Command;
 use tauri::{AppHandle, Manager};
+use time::{format_description::well_known::Rfc3339, macros::format_description, OffsetDateTime};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +39,27 @@ struct ImportResult {
 #[serde(rename_all = "camelCase")]
 struct BackupResult {
     backup_path: String,
+    manifest_path: String,
+    message: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachmentImportResult {
+    relative_path: String,
+    full_path: String,
+    file_name: String,
+    mime_type: String,
+    size_bytes: u64,
+    sha256: String,
+    message: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachmentActionResult {
+    file_deleted: bool,
+    full_path: String,
     message: String,
 }
 
@@ -55,12 +79,50 @@ struct SaveResult {
     counts: Value,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RestoreResult {
+    restored_from: String,
+    safety_backup_path: String,
+    message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupManifest {
+    format_version: u32,
+    created_at: String,
+    app_name: String,
+    database: BackupFileManifest,
+    documents: BackupDocumentsManifest,
+    live_counts: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupFileManifest {
+    relative_path: String,
+    size_bytes: u64,
+    sha256: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupDocumentsManifest {
+    relative_dir: String,
+    managed_files_count: usize,
+    files: Vec<BackupFileManifest>,
+}
+
 struct AppPaths {
     app_data_dir: PathBuf,
     db_path: PathBuf,
     documents_dir: PathBuf,
     backups_dir: PathBuf,
 }
+
+const MANAGED_INVOICE_DIR: &str = "invoices";
+const BACKUP_FORMAT_VERSION: u32 = 1;
 
 const STATE_ARRAY_KEYS: &[&str] = &[
     "hiph_sites",
@@ -96,10 +158,21 @@ const STATE_KEYS: &[&str] = &[
 ];
 
 fn unix_timestamp_string() -> String {
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(d) => d.as_secs().to_string(),
-        Err(_) => "0".to_string(),
-    }
+    OffsetDateTime::now_utc().unix_timestamp().to_string()
+}
+
+fn iso_timestamp_string() -> String {
+    OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| unix_timestamp_string())
+}
+
+fn backup_name_timestamp() -> String {
+    OffsetDateTime::now_utc()
+        .format(format_description!(
+            "[year][month][day]-[hour][minute][second]"
+        ))
+        .unwrap_or_else(|_| unix_timestamp_string())
 }
 
 fn storage_paths(app: &AppHandle) -> Result<AppPaths, String> {
@@ -120,6 +193,10 @@ fn storage_paths(app: &AppHandle) -> Result<AppPaths, String> {
     })
 }
 
+fn managed_invoice_documents_dir(paths: &AppPaths) -> PathBuf {
+    paths.documents_dir.join(MANAGED_INVOICE_DIR)
+}
+
 fn ensure_storage_and_schema(app: &AppHandle) -> Result<AppPaths, String> {
     let paths = storage_paths(app)?;
 
@@ -127,6 +204,8 @@ fn ensure_storage_and_schema(app: &AppHandle) -> Result<AppPaths, String> {
         .map_err(|e| format!("Could not create app data folder: {e}"))?;
     fs::create_dir_all(&paths.documents_dir)
         .map_err(|e| format!("Could not create documents folder: {e}"))?;
+    fs::create_dir_all(managed_invoice_documents_dir(&paths))
+        .map_err(|e| format!("Could not create invoice documents folder: {e}"))?;
     fs::create_dir_all(&paths.backups_dir)
         .map_err(|e| format!("Could not create backups folder: {e}"))?;
 
@@ -244,6 +323,515 @@ fn ensure_schema(conn: &Connection) -> Result<(), String> {
         ",
     )
     .map_err(|e| format!("Could not create database schema: {e}"))
+}
+
+fn sanitize_path_component(input: &str, fallback: &str) -> String {
+    let mut output = String::new();
+    let mut last_was_separator = false;
+
+    for ch in input.chars() {
+        let safe = if ch.is_ascii_alphanumeric() {
+            Some(ch)
+        } else if ch == '.' || ch == '_' || ch == '-' {
+            Some(ch)
+        } else if ch.is_whitespace() {
+            Some('-')
+        } else {
+            None
+        };
+
+        if let Some(next) = safe {
+            if next == '-' && last_was_separator {
+                continue;
+            }
+            output.push(next);
+            last_was_separator = next == '-';
+        } else if !last_was_separator {
+            output.push('-');
+            last_was_separator = true;
+        }
+    }
+
+    let mut trimmed = output
+        .trim_matches(|c| c == '.' || c == '-' || c == '_' || c == ' ')
+        .to_string();
+    while trimmed.contains("..") {
+        trimmed = trimmed.replace("..", ".");
+    }
+
+    if trimmed.is_empty() {
+        fallback.to_string()
+    } else {
+        trimmed
+    }
+}
+
+fn extension_from_mime_type(mime_type: &str) -> &'static str {
+    match mime_type {
+        "application/pdf" => "pdf",
+        "image/jpeg" => "jpg",
+        "image/png" => "png",
+        "image/gif" => "gif",
+        "image/bmp" => "bmp",
+        "image/tiff" => "tif",
+        "image/webp" => "webp",
+        "image/svg+xml" => "svg",
+        _ => "bin",
+    }
+}
+
+fn safe_display_file_name(file_name: &str, mime_type: &str) -> String {
+    let source = Path::new(file_name)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(file_name);
+
+    let mut safe_name = sanitize_path_component(source, "invoice-document");
+    while safe_name.contains("..") {
+        safe_name = safe_name.replace("..", ".");
+    }
+    if !safe_name.contains('.') {
+        safe_name.push('.');
+        safe_name.push_str(extension_from_mime_type(mime_type));
+    }
+    safe_name
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    format!("{:x}", hasher.finalize())
+}
+
+fn sha256_file(path: &Path) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|e| format!("Could not read file checksum: {e}"))?;
+    Ok(sha256_hex(&bytes))
+}
+
+fn relative_path_string(path: &Path) -> String {
+    path.components()
+        .map(|part| part.as_os_str().to_string_lossy().to_string())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn ensure_relative_safe_path(relative_path: &str) -> Result<&Path, String> {
+    let path = Path::new(relative_path);
+    if path.is_absolute() {
+        return Err("The saved document path is not valid.".to_string());
+    }
+    if path
+        .components()
+        .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err("The saved document path is not valid.".to_string());
+    }
+    Ok(path)
+}
+
+fn resolve_managed_document_path(paths: &AppPaths, relative_path: &str) -> Result<PathBuf, String> {
+    let relative = ensure_relative_safe_path(relative_path)?;
+    Ok(paths.documents_dir.join(relative))
+}
+
+fn count_other_document_references(
+    data: &Map<String, Value>,
+    relative_path: &str,
+    exclude_invoice_id: &str,
+) -> usize {
+    value_as_object(data, "hiph_invoice_docs")
+        .map(|docs| {
+            docs.iter()
+                .filter(|(invoice_id, item)| {
+                    invoice_id.as_str() != exclude_invoice_id
+                        && item
+                            .get("managedRelativePath")
+                            .and_then(Value::as_str)
+                            .map(|value| value == relative_path)
+                            .unwrap_or(false)
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+fn write_file_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Could not prepare the invoice documents folder.".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|e| format!("Could not create the invoice documents folder: {e}"))?;
+
+    let temp_path = path.with_extension(format!(
+        "{}{}.tmp",
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| format!("{ext}."))
+            .unwrap_or_default(),
+        unix_timestamp_string()
+    ));
+
+    let mut file =
+        fs::File::create(&temp_path).map_err(|e| format!("Could not create document file: {e}"))?;
+    file.write_all(bytes)
+        .and_then(|_| file.flush())
+        .map_err(|e| format!("Could not write document file: {e}"))?;
+    fs::rename(&temp_path, path).map_err(|e| {
+        let _ = fs::remove_file(&temp_path);
+        format!("Could not save document file: {e}")
+    })
+}
+
+fn managed_document_relative_path(invoice_id: &str, file_name: &str, checksum: &str) -> String {
+    let safe_invoice_id = sanitize_path_component(invoice_id, "invoice");
+    let safe_file_name = safe_display_file_name(file_name, "");
+    let short_checksum = checksum.chars().take(12).collect::<String>();
+    format!(
+        "{MANAGED_INVOICE_DIR}/{}--{}--{}",
+        safe_invoice_id, short_checksum, safe_file_name
+    )
+}
+
+fn save_managed_invoice_document(
+    paths: &AppPaths,
+    invoice_id: &str,
+    file_name: &str,
+    mime_type: &str,
+    bytes: &[u8],
+) -> Result<AttachmentImportResult, String> {
+    if invoice_id.trim().is_empty() {
+        return Err("The invoice ID is missing, so the attachment could not be saved.".to_string());
+    }
+    if bytes.is_empty() {
+        return Err("The selected attachment file was empty.".to_string());
+    }
+
+    let safe_file_name = safe_display_file_name(file_name, mime_type);
+    let checksum = sha256_hex(bytes);
+    let relative_path = managed_document_relative_path(invoice_id, &safe_file_name, &checksum);
+    let full_path = resolve_managed_document_path(paths, &relative_path)?;
+
+    write_file_atomic(&full_path, bytes)?;
+
+    Ok(AttachmentImportResult {
+        relative_path,
+        full_path: full_path.to_string_lossy().to_string(),
+        file_name: safe_file_name,
+        mime_type: mime_type.to_string(),
+        size_bytes: bytes.len() as u64,
+        sha256: checksum,
+        message: "Attachment saved in the desktop documents folder.".to_string(),
+    })
+}
+
+fn read_backup_manifest(backup_path: &Path) -> Result<BackupManifest, String> {
+    let manifest_path = backup_path.join("manifest.json");
+    let manifest_text = fs::read_to_string(&manifest_path)
+        .map_err(|e| format!("Could not read backup manifest.json: {e}"))?;
+    let manifest: BackupManifest = serde_json::from_str(&manifest_text)
+        .map_err(|e| format!("Backup manifest.json is not valid JSON: {e}"))?;
+
+    if manifest.format_version != BACKUP_FORMAT_VERSION {
+        return Err(format!(
+            "This backup format version ({}) is not supported by this app.",
+            manifest.format_version
+        ));
+    }
+
+    ensure_relative_safe_path(&manifest.database.relative_path)
+        .map_err(|_| "The backup manifest contains an unsafe database path.".to_string())?;
+    ensure_relative_safe_path(&manifest.documents.relative_dir)
+        .map_err(|_| "The backup manifest contains an unsafe documents path.".to_string())?;
+
+    let db_path = backup_path.join(&manifest.database.relative_path);
+    if !db_path.is_file() {
+        return Err("The selected backup is missing its SQLite database copy.".to_string());
+    }
+    if sha256_file(&db_path)? != manifest.database.sha256 {
+        return Err("The selected backup database copy does not match its manifest.".to_string());
+    }
+
+    let docs_root = backup_path.join(&manifest.documents.relative_dir);
+    if !docs_root.is_dir() {
+        return Err("The selected backup is missing its documents folder.".to_string());
+    }
+
+    for file in &manifest.documents.files {
+        ensure_relative_safe_path(&file.relative_path)
+            .map_err(|_| "The backup manifest contains an unsafe document path.".to_string())?;
+        let doc_path = backup_path.join(&file.relative_path);
+        if !doc_path.is_file() {
+            return Err(format!(
+                "The selected backup is missing document file '{}'.",
+                file.relative_path
+            ));
+        }
+        if sha256_file(&doc_path)? != file.sha256 {
+            return Err(format!(
+                "Document file '{}' does not match the backup manifest.",
+                file.relative_path
+            ));
+        }
+    }
+
+    Ok(manifest)
+}
+
+fn list_files_recursive(root: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut files = Vec::new();
+    if !root.exists() {
+        return Ok(files);
+    }
+    for entry in fs::read_dir(root)
+        .map_err(|e| format!("Could not list folder '{}': {e}", root.display()))?
+    {
+        let entry = entry.map_err(|e| format!("Could not read folder entry: {e}"))?;
+        let path = entry.path();
+        if path.is_dir() {
+            files.extend(list_files_recursive(&path)?);
+        } else if path.is_file() {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), String> {
+    if !src.exists() {
+        fs::create_dir_all(dest)
+            .map_err(|e| format!("Could not create folder '{}': {e}", dest.display()))?;
+        return Ok(());
+    }
+
+    fs::create_dir_all(dest)
+        .map_err(|e| format!("Could not create folder '{}': {e}", dest.display()))?;
+
+    for entry in
+        fs::read_dir(src).map_err(|e| format!("Could not read folder '{}': {e}", src.display()))?
+    {
+        let entry = entry.map_err(|e| format!("Could not read folder entry: {e}"))?;
+        let from = entry.path();
+        let to = dest.join(entry.file_name());
+        if from.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else if from.is_file() {
+            if let Some(parent) = to.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("Could not create folder '{}': {e}", parent.display()))?;
+            }
+            fs::copy(&from, &to).map_err(|e| {
+                format!(
+                    "Could not copy '{}' into the backup folder: {e}",
+                    from.display()
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+fn remove_path_if_exists(path: &Path) -> Result<(), String> {
+    if path.is_dir() {
+        fs::remove_dir_all(path)
+            .map_err(|e| format!("Could not remove folder '{}': {e}", path.display()))?;
+    } else if path.is_file() {
+        fs::remove_file(path)
+            .map_err(|e| format!("Could not remove file '{}': {e}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn create_desktop_backup(
+    paths: &AppPaths,
+    live_counts: Value,
+    label: &str,
+) -> Result<BackupResult, String> {
+    if !paths.db_path.exists() {
+        return Err("SQLite database file was not found yet.".to_string());
+    }
+
+    let backup_root = paths.backups_dir.join(format!(
+        "hiload-plant-maintenance-{}-{}",
+        label,
+        backup_name_timestamp()
+    ));
+    let database_dir = backup_root.join("database");
+    let documents_dir = backup_root.join("documents");
+    fs::create_dir_all(&database_dir)
+        .map_err(|e| format!("Could not create backup folder: {e}"))?;
+    fs::create_dir_all(&documents_dir)
+        .map_err(|e| format!("Could not create backup documents folder: {e}"))?;
+
+    let backup_db_path = database_dir.join("hiload-plant-maintenance.sqlite3");
+    fs::copy(&paths.db_path, &backup_db_path)
+        .map_err(|e| format!("Could not copy the SQLite database into the backup folder: {e}"))?;
+    copy_dir_recursive(&paths.documents_dir, &documents_dir)?;
+
+    let document_files = list_files_recursive(&documents_dir)?;
+    let mut manifest_files = Vec::new();
+    for path in document_files {
+        let relative_from_backup = path
+            .strip_prefix(&backup_root)
+            .map_err(|_| "Could not prepare the backup manifest.".to_string())?;
+        let metadata = fs::metadata(&path)
+            .map_err(|e| format!("Could not read backup document metadata: {e}"))?;
+        manifest_files.push(BackupFileManifest {
+            relative_path: relative_path_string(relative_from_backup),
+            size_bytes: metadata.len(),
+            sha256: sha256_file(&path)?,
+        });
+    }
+
+    let database_metadata = fs::metadata(&backup_db_path)
+        .map_err(|e| format!("Could not read backup database metadata: {e}"))?;
+    let manifest = BackupManifest {
+        format_version: BACKUP_FORMAT_VERSION,
+        created_at: iso_timestamp_string(),
+        app_name: "Hiload Plant Maintenance".to_string(),
+        database: BackupFileManifest {
+            relative_path: "database/hiload-plant-maintenance.sqlite3".to_string(),
+            size_bytes: database_metadata.len(),
+            sha256: sha256_file(&backup_db_path)?,
+        },
+        documents: BackupDocumentsManifest {
+            relative_dir: "documents".to_string(),
+            managed_files_count: manifest_files.len(),
+            files: manifest_files,
+        },
+        live_counts,
+    };
+
+    let manifest_path = backup_root.join("manifest.json");
+    let manifest_text = serde_json::to_string_pretty(&manifest)
+        .map_err(|e| format!("Could not write backup manifest: {e}"))?;
+    fs::write(&manifest_path, manifest_text)
+        .map_err(|e| format!("Could not write backup manifest.json: {e}"))?;
+
+    Ok(BackupResult {
+        backup_path: backup_root.to_string_lossy().to_string(),
+        manifest_path: manifest_path.to_string_lossy().to_string(),
+        message: "Desktop backup created with the SQLite database, managed invoice documents, and a manifest."
+            .to_string(),
+    })
+}
+
+fn open_path_with_system_default(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "", &path.to_string_lossy()])
+            .spawn()
+            .map_err(|e| format!("Could not open the saved attachment: {e}"))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("Could not open the saved attachment: {e}"))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("Could not open the saved attachment: {e}"))?;
+    }
+    Ok(())
+}
+
+fn restore_desktop_backup_at_paths(
+    paths: &AppPaths,
+    selected_backup_path: &Path,
+) -> Result<RestoreResult, String> {
+    if !selected_backup_path.is_dir() {
+        return Err(
+            "Please choose a desktop backup folder that contains manifest.json.".to_string(),
+        );
+    }
+
+    let manifest = read_backup_manifest(selected_backup_path)?;
+    let conn = open_db(&paths.db_path)?;
+    let (data, _) = load_live_state(&conn)?;
+    let safety_backup = create_desktop_backup(paths, live_counts(&data), "pre-restore-safety")?;
+
+    let staged_root = paths
+        .backups_dir
+        .join(format!("restore-staging-{}", backup_name_timestamp()));
+    let staged_db = staged_root.join("hiload-plant-maintenance.sqlite3");
+    let staged_documents = staged_root.join("documents");
+    fs::create_dir_all(&staged_root)
+        .map_err(|e| format!("Could not prepare the restore staging folder: {e}"))?;
+    fs::copy(
+        selected_backup_path.join(&manifest.database.relative_path),
+        &staged_db,
+    )
+    .map_err(|e| format!("Could not stage the backup database copy: {e}"))?;
+    copy_dir_recursive(
+        &selected_backup_path.join(&manifest.documents.relative_dir),
+        &staged_documents,
+    )?;
+
+    let rollback_root = paths
+        .backups_dir
+        .join(format!("restore-rollback-{}", backup_name_timestamp()));
+    fs::create_dir_all(&rollback_root)
+        .map_err(|e| format!("Could not prepare the rollback folder: {e}"))?;
+    let rollback_db = rollback_root.join("hiload-plant-maintenance.sqlite3");
+    let rollback_documents = rollback_root.join("documents");
+
+    if paths.db_path.exists() {
+        fs::rename(&paths.db_path, &rollback_db)
+            .map_err(|e| format!("Could not secure the current database before restore: {e}"))?;
+    }
+    if paths.documents_dir.exists() {
+        if let Err(err) = fs::rename(&paths.documents_dir, &rollback_documents) {
+            if rollback_db.exists() {
+                let _ = fs::rename(&rollback_db, &paths.db_path);
+            }
+            let _ = remove_path_if_exists(&rollback_root);
+            let _ = remove_path_if_exists(&staged_root);
+            return Err(format!(
+                "Could not secure the current documents before restore: {err}"
+            ));
+        }
+    }
+
+    let restore_attempt = (|| -> Result<(), String> {
+        fs::copy(&staged_db, &paths.db_path)
+            .map_err(|e| format!("Could not restore the SQLite database copy: {e}"))?;
+        copy_dir_recursive(&staged_documents, &paths.documents_dir)?;
+        let conn = open_db(&paths.db_path)?;
+        ensure_schema(&conn)?;
+        Ok(())
+    })();
+
+    if let Err(err) = restore_attempt {
+        let _ = remove_path_if_exists(&paths.db_path);
+        let _ = remove_path_if_exists(&paths.documents_dir);
+        if rollback_db.exists() {
+            let _ = fs::rename(&rollback_db, &paths.db_path);
+        }
+        if rollback_documents.exists() {
+            let _ = fs::rename(&rollback_documents, &paths.documents_dir);
+        }
+        let _ = remove_path_if_exists(&staged_root);
+        let _ = remove_path_if_exists(&rollback_root);
+        return Err(format!(
+            "Restore stopped before replacing your data safely: {err}"
+        ));
+    }
+
+    let _ = remove_path_if_exists(&rollback_root);
+    let _ = remove_path_if_exists(&staged_root);
+
+    Ok(RestoreResult {
+        restored_from: selected_backup_path.to_string_lossy().to_string(),
+        safety_backup_path: safety_backup.backup_path,
+        message: "Desktop restore completed. The app will now reload the restored SQLite data and invoice documents.".to_string(),
+    })
 }
 
 fn default_state_value(key: &str) -> Value {
@@ -501,9 +1089,15 @@ fn insert_backup_data(
                 .map(ToOwned::to_owned);
             let size_bytes = item.get("size").and_then(Value::as_i64);
             let has_data = item
-                .get("dataUrl")
+                .get("managedRelativePath")
                 .and_then(Value::as_str)
-                .map(|s| i64::from(!s.trim().is_empty()))
+                .filter(|s| !s.trim().is_empty())
+                .map(|_| 1)
+                .or_else(|| {
+                    item.get("dataUrl")
+                        .and_then(Value::as_str)
+                        .map(|s| i64::from(!s.trim().is_empty()))
+                })
                 .unwrap_or(0);
 
             tx.execute(
@@ -551,13 +1145,6 @@ fn insert_backup_data(
     }
 
     Ok(counts)
-}
-
-fn backup_file_name() -> String {
-    format!(
-        "hiload-plant-maintenance-backup-{}.sqlite3",
-        unix_timestamp_string()
-    )
 }
 
 fn read_json_rows_as_array(conn: &Connection, table: &str) -> Result<Vec<Value>, String> {
@@ -866,32 +1453,99 @@ fn import_browser_backup_into_sqlite(
 }
 
 #[tauri::command]
-fn export_sqlite_backup(app: AppHandle) -> Result<BackupResult, String> {
+fn import_invoice_document_bytes(
+    app: AppHandle,
+    invoice_id: String,
+    file_name: String,
+    mime_type: String,
+    data_base64: String,
+) -> Result<AttachmentImportResult, String> {
     let paths = ensure_storage_and_schema(&app)?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64.trim())
+        .map_err(|e| format!("The selected attachment could not be read safely: {e}"))?;
+    save_managed_invoice_document(&paths, &invoice_id, &file_name, &mime_type, &bytes)
+}
 
-    if !paths.db_path.exists() {
-        return Err("SQLite database file was not found yet.".to_string());
+#[tauri::command]
+fn open_invoice_document(
+    app: AppHandle,
+    relative_path: String,
+) -> Result<AttachmentActionResult, String> {
+    let paths = ensure_storage_and_schema(&app)?;
+    let full_path = resolve_managed_document_path(&paths, &relative_path)?;
+    if !full_path.is_file() {
+        return Err("The saved invoice attachment file could not be found. You can attach it again with Replace document.".to_string());
+    }
+    open_path_with_system_default(&full_path)?;
+    Ok(AttachmentActionResult {
+        file_deleted: false,
+        full_path: full_path.to_string_lossy().to_string(),
+        message: "Attachment opened in Windows.".to_string(),
+    })
+}
+
+#[tauri::command]
+fn remove_invoice_document(
+    app: AppHandle,
+    invoice_id: String,
+    relative_path: String,
+    data: Value,
+) -> Result<AttachmentActionResult, String> {
+    let paths = ensure_storage_and_schema(&app)?;
+    let data = get_data_block(&data)?;
+    let full_path = resolve_managed_document_path(&paths, &relative_path)?;
+    let shared_count = count_other_document_references(data, &relative_path, &invoice_id);
+
+    if shared_count > 0 {
+        return Ok(AttachmentActionResult {
+            file_deleted: false,
+            full_path: full_path.to_string_lossy().to_string(),
+            message: "Attachment reference removed. The file was kept because another record still uses it.".to_string(),
+        });
     }
 
-    let destination = paths.backups_dir.join(backup_file_name());
-    fs::copy(&paths.db_path, &destination)
-        .map_err(|e| format!("Could not create backup copy: {e}"))?;
+    if full_path.exists() {
+        fs::remove_file(&full_path)
+            .map_err(|e| format!("The attachment file could not be removed safely: {e}"))?;
+    }
 
-    Ok(BackupResult {
-        backup_path: destination.to_string_lossy().to_string(),
-        message: "SQLite backup file created successfully.".to_string(),
+    Ok(AttachmentActionResult {
+        file_deleted: true,
+        full_path: full_path.to_string_lossy().to_string(),
+        message: "Attachment removed from the desktop documents folder.".to_string(),
     })
+}
+
+#[tauri::command]
+fn export_sqlite_backup(app: AppHandle) -> Result<BackupResult, String> {
+    let paths = ensure_storage_and_schema(&app)?;
+    let conn = open_db(&paths.db_path)?;
+    let (data, _) = load_live_state(&conn)?;
+    create_desktop_backup(&paths, live_counts(&data), "backup")
+}
+
+#[tauri::command]
+fn restore_desktop_backup(app: AppHandle, backup_path: String) -> Result<RestoreResult, String> {
+    let paths = ensure_storage_and_schema(&app)?;
+    let selected_backup_path = PathBuf::from(backup_path.trim());
+    restore_desktop_backup_at_paths(&paths, &selected_backup_path)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             desktop_status,
             load_live_state_from_sqlite,
             save_live_state_to_sqlite,
             import_browser_backup_into_sqlite,
-            export_sqlite_backup
+            import_invoice_document_bytes,
+            open_invoice_document,
+            remove_invoice_document,
+            export_sqlite_backup,
+            restore_desktop_backup
         ])
         .setup(|app| {
             ensure_storage_and_schema(app.handle())
@@ -905,6 +1559,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn sample_state() -> Map<String, Value> {
         let mut data = Map::new();
@@ -954,6 +1609,49 @@ mod tests {
             json!({ "inv_1": { "fileName": "invoice.pdf", "mimeType": "application/pdf", "size": 12, "dataUrl": "data:application/pdf;base64,AAAA" } }),
         );
         data
+    }
+
+    fn sample_state_with_managed_document(relative_path: &str) -> Map<String, Value> {
+        let mut data = sample_state();
+        data.insert(
+            "hiph_invoice_docs".to_string(),
+            json!({
+                "inv_1": {
+                    "fileName": "invoice.pdf",
+                    "mimeType": "application/pdf",
+                    "size": 12,
+                    "managedRelativePath": relative_path,
+                    "storageKind": "desktop_managed_file"
+                }
+            }),
+        );
+        data
+    }
+
+    fn temp_app_paths(label: &str) -> AppPaths {
+        let root = std::env::temp_dir().join(format!(
+            "hiload-plant-maintenance-tests-{}-{}",
+            label,
+            unix_timestamp_string()
+        ));
+        let app_data_dir = root.join("app-data");
+        let db_path = app_data_dir.join("hiload-plant-maintenance.sqlite3");
+        let documents_dir = app_data_dir.join("documents");
+        let backups_dir = app_data_dir.join("backups");
+        fs::create_dir_all(managed_invoice_documents_dir(&AppPaths {
+            app_data_dir: app_data_dir.clone(),
+            db_path: db_path.clone(),
+            documents_dir: documents_dir.clone(),
+            backups_dir: backups_dir.clone(),
+        }))
+        .expect("create managed docs dir");
+        fs::create_dir_all(&backups_dir).expect("create backups dir");
+        AppPaths {
+            app_data_dir,
+            db_path,
+            documents_dir,
+            backups_dir,
+        }
     }
 
     #[test]
@@ -1012,5 +1710,146 @@ mod tests {
             loaded["hiph_invoice_docs"]["inv_1"]["mimeType"],
             json!("application/pdf")
         );
+    }
+
+    #[test]
+    fn managed_document_paths_are_sanitized_and_confined() {
+        let paths = temp_app_paths("sanitize");
+        let saved = save_managed_invoice_document(
+            &paths,
+            "inv/../1",
+            "..\\bad invoice name?.pdf",
+            "application/pdf",
+            b"pdf-bytes",
+        )
+        .expect("save managed document");
+
+        assert!(saved.relative_path.starts_with("invoices/"));
+        assert!(saved.relative_path.contains("inv"));
+        assert!(saved.relative_path.contains("invoice-name"));
+        assert!(!saved.relative_path.contains(".."));
+        assert!(resolve_managed_document_path(&paths, "../escape").is_err());
+        assert!(Path::new(&saved.full_path).starts_with(&paths.documents_dir));
+    }
+
+    #[test]
+    fn attachment_reference_count_protects_shared_files() {
+        let shared = "invoices/inv_1--abc--invoice.pdf";
+        let data = Map::from_iter([(
+            "hiph_invoice_docs".to_string(),
+            json!({
+                "inv_1": { "managedRelativePath": shared },
+                "inv_2": { "managedRelativePath": shared },
+                "inv_3": { "managedRelativePath": "invoices/other.pdf" }
+            }),
+        )]);
+
+        assert_eq!(count_other_document_references(&data, shared, "inv_1"), 1);
+        assert_eq!(count_other_document_references(&data, shared, "inv_2"), 1);
+        assert_eq!(count_other_document_references(&data, shared, "inv_9"), 2);
+    }
+
+    #[test]
+    fn backup_manifest_validates_backup_contents() {
+        let paths = temp_app_paths("backup");
+        let saved = save_managed_invoice_document(
+            &paths,
+            "inv_1",
+            "invoice.pdf",
+            "application/pdf",
+            b"invoice-bytes",
+        )
+        .expect("save managed document");
+
+        let data = sample_state_with_managed_document(&saved.relative_path);
+        let mut conn = open_db(&paths.db_path).expect("db");
+        ensure_schema(&conn).expect("schema");
+        let tx = conn.transaction().expect("tx");
+        replace_live_state(&tx, &data, "test").expect("replace live state");
+        tx.commit().expect("commit");
+
+        let backup =
+            create_desktop_backup(&paths, live_counts(&data), "backup-test").expect("backup");
+        let manifest = read_backup_manifest(Path::new(&backup.backup_path)).expect("manifest");
+
+        assert_eq!(manifest.format_version, BACKUP_FORMAT_VERSION);
+        assert_eq!(manifest.documents.managed_files_count, 1);
+        assert_eq!(manifest.live_counts["hiph_invoices"], json!(1));
+    }
+
+    #[test]
+    fn backup_manifest_rejects_unsafe_paths() {
+        let paths = temp_app_paths("unsafe-manifest");
+        let backup_root = paths.backups_dir.join("unsafe-backup");
+        fs::create_dir_all(&backup_root).expect("backup root");
+        fs::write(
+            backup_root.join("manifest.json"),
+            r#"{
+          "formatVersion": 1,
+          "createdAt": "2026-09-10T00:00:00Z",
+          "appName": "Hiload Plant Maintenance",
+          "database": { "relativePath": "../db.sqlite3", "sizeBytes": 1, "sha256": "abc" },
+          "documents": { "relativeDir": "documents", "managedFilesCount": 0, "files": [] },
+          "liveCounts": {}
+        }"#,
+        )
+        .expect("write manifest");
+
+        let err = read_backup_manifest(&backup_root).expect_err("unsafe path should fail");
+        assert!(err.contains("unsafe database path"));
+    }
+
+    #[test]
+    fn restore_round_trip_recovers_prior_database_and_documents() {
+        let paths = temp_app_paths("restore");
+        let original_doc = save_managed_invoice_document(
+            &paths,
+            "inv_1",
+            "invoice.pdf",
+            "application/pdf",
+            b"original-bytes",
+        )
+        .expect("save original");
+        let original_state = sample_state_with_managed_document(&original_doc.relative_path);
+        let mut conn = open_db(&paths.db_path).expect("db");
+        ensure_schema(&conn).expect("schema");
+        let tx = conn.transaction().expect("tx");
+        replace_live_state(&tx, &original_state, "original").expect("save original state");
+        tx.commit().expect("commit original");
+
+        let backup = create_desktop_backup(&paths, live_counts(&original_state), "restore-test")
+            .expect("backup");
+
+        let replacement_doc = save_managed_invoice_document(
+            &paths,
+            "inv_1",
+            "replacement.pdf",
+            "application/pdf",
+            b"replacement-bytes",
+        )
+        .expect("save replacement");
+        let replacement_state = sample_state_with_managed_document(&replacement_doc.relative_path);
+        let mut conn = open_db(&paths.db_path).expect("db reopened");
+        ensure_schema(&conn).expect("schema reopened");
+        let tx = conn.transaction().expect("tx reopened");
+        replace_live_state(&tx, &replacement_state, "replacement").expect("save replacement state");
+        tx.commit().expect("commit replacement");
+
+        let result = restore_desktop_backup_at_paths(&paths, Path::new(&backup.backup_path))
+            .expect("restore backup");
+        let conn = open_db(&paths.db_path).expect("open restored db");
+        let (loaded, source) = load_live_state(&conn).expect("load restored state");
+
+        assert_eq!(source, "app_state");
+        assert_eq!(
+            loaded["hiph_invoice_docs"]["inv_1"]["managedRelativePath"],
+            json!(original_doc.relative_path)
+        );
+        assert!(
+            resolve_managed_document_path(&paths, &original_doc.relative_path)
+                .expect("restored path")
+                .exists()
+        );
+        assert!(Path::new(&result.safety_backup_path).exists());
     }
 }

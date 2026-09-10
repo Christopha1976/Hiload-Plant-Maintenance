@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "http-server . -p 1420 -c-1",
+    "build:frontend": "node scripts/prepare-dist.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"

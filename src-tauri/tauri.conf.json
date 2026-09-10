@@ -5,8 +5,9 @@
   "identifier": "com.hiload.plantmaintenance",
   "build": {
     "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build:frontend",
     "devUrl": "http://localhost:1420",
-    "frontendDist": ".."
+    "frontendDist": "../dist"
   },
   "app": {
     "withGlobalTauri": true,
