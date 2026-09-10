@@ -4543,7 +4543,9 @@
           setLocalAiButtonsFromStatus();
         }
 
-        function refreshLocalAiStatus(){
+        function refreshLocalAiStatus(options){
+          options = options || {};
+          var syncInputs = !!options.syncInputs;
           var invoke = getTauriInvoke();
           if (!invoke || !desktopIsTauri) {
             renderLocalAiBrowserMode();
@@ -4557,13 +4559,17 @@
               localAiEnabledToggle.disabled = false;
               localAiEnabledToggle.checked = !!(status && status.enabled);
             }
-            if (localAiModelInput) {
+            if (syncInputs && localAiModelInput) {
               localAiModelInput.disabled = false;
               localAiModelInput.value = String(status && status.model || 'qwen2.5:1.5b-instruct-q4_K_M');
+            } else if (localAiModelInput) {
+              localAiModelInput.disabled = false;
             }
-            if (localAiModelDirInput) {
+            if (syncInputs && localAiModelDirInput) {
               localAiModelDirInput.disabled = false;
               localAiModelDirInput.value = String(status && status.modelDirectory || 'C:\\OllamaModels');
+            } else if (localAiModelDirInput) {
+              localAiModelDirInput.disabled = false;
             }
             localAiReady = !!(status && status.ready && status.enabled && status.endpointReachable && status.modelInstalled);
             if (localAiStatusText) localAiStatusText.textContent = String(status && status.message || 'Local AI status unavailable.');
@@ -4593,7 +4599,7 @@
           };
           if (localAiStatusText) localAiStatusText.textContent = 'Saving Local AI settings…';
           return invoke('update_local_ai_settings', { update: update }).then(function(){
-            return refreshLocalAiStatus().then(function(){
+            return refreshLocalAiStatus({ syncInputs: true }).then(function(){
               return true;
             });
           }).catch(function(err){
@@ -4653,7 +4659,7 @@
               desktopMessage.textContent = desktopMessageText;
             }
             setDesktopButtonState(true);
-            return refreshLocalAiStatus();
+            return refreshLocalAiStatus({ syncInputs: true });
           }).catch(function(err){
             renderDesktopError(err);
             setDesktopButtonState(false);

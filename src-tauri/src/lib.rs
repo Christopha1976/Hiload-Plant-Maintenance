@@ -822,6 +822,10 @@ fn contains_normalized_text(haystack: &str, needle: &str) -> bool {
     !right.is_empty() && left.contains(&right)
 }
 
+fn bounded_local_ai_ocr_text(text: &str) -> String {
+    truncate_chars(&normalize_invoice_text(text), MAX_LOCAL_AI_OCR_CHARS)
+}
+
 fn base_name_or_fallback(file_name: &str, fallback: &str) -> String {
     Path::new(file_name)
         .file_name()
@@ -1569,6 +1573,9 @@ fn local_ai_status_from_settings(settings: &LocalAiSettings) -> LocalAiStatus {
 
     let models = fetch_ollama_models(&normalized.endpoint, normalized.timeout_ms);
     let Ok(model_names) = models else {
+        let err = models
+            .err()
+            .unwrap_or_else(|| "Unknown local status error.".to_string());
         return LocalAiStatus {
             enabled: normalized.enabled,
             endpoint: normalized.endpoint,
@@ -1579,7 +1586,9 @@ fn local_ai_status_from_settings(settings: &LocalAiSettings) -> LocalAiStatus {
             endpoint_reachable: false,
             model_installed: false,
             ready: false,
-            message: "Ollama is installed but the local service is not reachable. Start Ollama and try again.".to_string(),
+            message: format!(
+                "Ollama status check failed: {err} Start/restart Ollama and check the local endpoint."
+            ),
         };
     };
 
@@ -1657,7 +1666,7 @@ fn run_local_ai_invoice_review(
             "OCR text is empty. Run invoice OCR first, then ask Local AI to review it.".to_string(),
         );
     }
-    let bounded_text = truncate_chars(&trimmed_text, MAX_LOCAL_AI_OCR_CHARS);
+    let bounded_text = bounded_local_ai_ocr_text(ocr_text);
     let payload = json!({
         "type": "object",
         "additionalProperties": false,
@@ -3375,6 +3384,32 @@ Notes: repair work";
         let err = run_local_ai_invoice_review(&settings, "Invoice Number: INV-1")
             .expect_err("disabled local ai must be blocked");
         assert!(err.contains("disabled"));
+    }
+
+    #[test]
+    fn local_ai_validation_uses_truncated_ocr_text() {
+        let keep = "Invoice Number: INV-KEEP";
+        let drop = "Invoice Number: INV-DROP";
+        let long_text = format!(
+            "{}\n{}\n{}",
+            keep,
+            "X".repeat(MAX_LOCAL_AI_OCR_CHARS + 50),
+            drop
+        );
+        let bounded = bounded_local_ai_ocr_text(&long_text);
+        assert!(!bounded.contains(drop));
+        let payload = json!({
+            "invoiceNumber": {
+                "value": "INV-DROP",
+                "evidence": "Invoice Number: INV-DROP",
+                "confidence": "high"
+            }
+        });
+        let (suggestions, warnings) =
+            build_local_ai_invoice_suggestions(&bounded, payload.as_object().expect("object"))
+                .expect("validation");
+        assert!(suggestions.is_empty());
+        assert!(warnings.iter().any(|w| w.contains("not found in OCR text")));
     }
 
     #[test]
