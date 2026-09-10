@@ -21,6 +21,7 @@ sha2 = "0.10"
 base64 = "0.23.1"
 time = { version = "0.3.55", features = ["formatting", "macros"] }
 tauri-plugin-dialog = "2.7.3"
+pdf-extract = "0.12.0"
 
 [profile.release]
 codegen-units = 1

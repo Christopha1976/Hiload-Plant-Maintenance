@@ -430,6 +430,12 @@
               </div>
               <div id="inv-file-meta" class="muted">No file selected.</div>
               <div id="inv-file-preview" class="stack"></div>
+              <div class="actions" style="margin-top:.25rem;flex-wrap:wrap">
+                <button type="button" class="btn" id="inv-ocr-btn" disabled>Read invoice with OCR</button>
+                <button type="button" class="btn" id="inv-ai-btn" disabled>Optional AI review</button>
+                <span class="muted" id="inv-ocr-help">Open this app in the Windows desktop version to read invoices locally.</span>
+              </div>
+              <div id="inv-ocr-results" class="stack"></div>
               <p class="muted" id="invoice-status-message">Invoice attachment status messages will appear here.</p>
               <div class="inline" style="flex-wrap:wrap;gap:.75rem">
                 <div class="field" style="min-width:220px;flex:1 1 220px">
@@ -665,7 +671,7 @@
               </div>
               <div>
                 <strong>7) Invoice Inbox (manual pre-conversion)</strong>
-                <p class="muted" style="margin:.25rem 0 0">Invoices → New Invoice lets you attach a PDF/image and capture supplier, invoice number/date, plant, maintenance type and amount fields. In the Windows desktop app, attachments are copied into the app’s documents folder so they survive restarts and backups. Review in Invoice Inbox, then click Post to maintenance manually. Email import, OCR and AI extraction are not included yet and will come later in desktop conversion.</p>
+                <p class="muted" style="margin:.25rem 0 0">Invoices → New Invoice lets you attach a PDF/image and capture supplier, invoice number/date, plant, maintenance type and amount fields. In the Windows desktop app, attachments are copied into the app’s documents folder so they survive restarts and backups. Use Read invoice with OCR to draft suggestions, review them carefully, apply only the values you want, then save normally. OCR and any future AI review never post or save an invoice automatically.</p>
               </div>
               <div>
                 <strong>Printing</strong>
@@ -686,6 +692,19 @@
               <button id="import-data-btn" class="btn primary" aria-controls="import-file">Import data (.json)</button>
               <label for="import-file" class="sr-only" id="import-file-label">Import data file (.json)</label>
               <input id="import-file" type="file" accept="application/json" class="sr-only" aria-labelledby="import-file-label" title="Import data (.json)">
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Invoice OCR &amp; optional AI</h3>
+            <div class="stack">
+              <p class="muted" style="margin:0">Local invoice reading works only in the Windows desktop app. This release can read PDF files that already contain selectable text, and it can try local Windows OCR for PNG and JPG/JPEG image files when that Windows feature is available.</p>
+              <p class="muted" style="margin:0">Scanned image-only PDFs may not return useful text yet. If that happens, attach a clear PNG or JPG photo instead, or type the invoice details manually.</p>
+              <label class="muted" style="display:flex;gap:.5rem;align-items:flex-start">
+                <input type="checkbox" disabled />
+                <span>Optional cloud AI review is <strong>off by default</strong> and is not enabled in this release. No AI API key is stored, backed up, or required for normal app use.</span>
+              </label>
+              <p class="muted" style="margin:0">When optional cloud AI is added in a future release, it will be a separate opt-in step, may have provider costs, may send invoice text to that provider, and will still require you to review every suggested field before applying it.</p>
             </div>
           </div>
 
@@ -1918,6 +1937,10 @@
         var invoiceFileHelp = byId('inv-file-help');
         var invoiceFileMeta = byId('inv-file-meta');
         var invoiceFilePreview = byId('inv-file-preview');
+        var invoiceOcrBtn = byId('inv-ocr-btn');
+        var invoiceAiBtn = byId('inv-ai-btn');
+        var invoiceOcrHelp = byId('inv-ocr-help');
+        var invoiceOcrResults = byId('inv-ocr-results');
         var invoiceStatusMessage = byId('invoice-status-message');
         var invoiceTableBody = $('#invoice-table tbody');
         var invoiceFilterStatusSel = byId('inv-filter-status');
@@ -1927,6 +1950,8 @@
         var invoiceSupplierForm = byId('invoice-supplier-form');
         var invoiceSupplierList = byId('invoice-supplier-list');
         var invoiceFilter = { status: 'all', supplierId: 'all', plantId: 'all' };
+        var invoiceNewOcrState = null;
+        var invoiceReviewOcrState = null;
 
         function setInvoiceStatusText(text){
           if (invoiceStatusMessage) invoiceStatusMessage.textContent = String(text || '');
@@ -2064,6 +2089,8 @@
         function resetInvoiceFileUi(){
           if (invoiceFileMeta) invoiceFileMeta.textContent = 'No file selected.';
           if (invoiceFilePreview) invoiceFilePreview.innerHTML = '';
+          invoiceNewOcrState = null;
+          if (invoiceOcrResults) invoiceOcrResults.innerHTML = '';
         }
 
         function arrayBufferToBase64(buffer){
@@ -2079,6 +2106,199 @@
 
         function cloneData(value){
           return JSON.parse(JSON.stringify(value));
+        }
+
+        function base64FromDataUrl(dataUrl){
+          var value = String(dataUrl || '');
+          var commaIndex = value.indexOf(',');
+          return commaIndex >= 0 ? value.slice(commaIndex + 1) : '';
+        }
+
+        function normalizeSupplierMatchName(value){
+          return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        }
+
+        function findSupplierMatchByName(name){
+          var target = normalizeSupplierMatchName(name);
+          if (!target) return null;
+          return state.suppliers.find(function(s){
+            return normalizeSupplierMatchName(s.name) === target;
+          }) || null;
+        }
+
+        function invoiceFieldCurrentValue(field, target){
+          if (field === 'supplierName') {
+            var supplier = findSupplierById(target.supplierSelect ? target.supplierSelect.value : '');
+            return supplier ? supplier.name : '';
+          }
+          var el = target.fields[field];
+          if (!el) return '';
+          return String(el.value || '').trim();
+        }
+
+        function invoiceFieldEditable(field, target){
+          if (!target || !target.fields) return false;
+          if (field === 'supplierName') return !!target.supplierSelect && !target.supplierSelect.disabled;
+          return !!target.fields[field] && !target.fields[field].disabled;
+        }
+
+        function prepareOcrSuggestionsForTarget(result, target){
+          var suggestions = Array.isArray(result && result.suggestions) ? result.suggestions : [];
+          return suggestions.map(function(item){
+            var next = {
+              field: String(item.field || ''),
+              label: String(item.label || item.field || ''),
+              value: String(item.value || ''),
+              confidence: String(item.confidence || 'low'),
+              reason: String(item.reason || '')
+            };
+            next.currentValue = invoiceFieldCurrentValue(next.field, target);
+            next.canApply = invoiceFieldEditable(next.field, target);
+            next.applyHint = '';
+            if (next.field === 'supplierName') {
+              next.matchedSupplier = findSupplierMatchByName(next.value);
+              if (!next.matchedSupplier) {
+                next.canApply = false;
+                next.applyHint = 'No existing supplier match was found. Please choose the supplier yourself or add one manually.';
+              } else {
+                next.applyHint = 'Will select existing supplier: ' + next.matchedSupplier.name;
+              }
+            } else if (!next.canApply) {
+              next.applyHint = 'This field is locked on this invoice.';
+            }
+            return next;
+          });
+        }
+
+        function renderInvoiceOcrResult(container, stateKey, result, target){
+          if (!container) return;
+          var prepared = prepareOcrSuggestionsForTarget(result, target);
+          var warnings = Array.isArray(result && result.warnings) ? result.warnings : [];
+          var limitations = Array.isArray(result && result.limitations) ? result.limitations : [];
+          var rawText = String(result && result.extractedText || '');
+          if (stateKey === 'new') invoiceNewOcrState = { result: result, prepared: prepared };
+          else invoiceReviewOcrState = { result: result, prepared: prepared };
+          container.innerHTML =
+            '<div class="mini-card" style="margin-top:.5rem">' +
+              '<div style="display:flex;gap:.5rem;justify-content:space-between;align-items:flex-start;flex-wrap:wrap">' +
+                '<div><strong>OCR review</strong><div class="muted" style="margin-top:.25rem">'+escapeHtml(result && result.message ? result.message : 'Review the suggestions carefully.')+'</div></div>' +
+                '<button type="button" class="btn primary" id="'+stateKey+'-ocr-apply">Apply reviewed suggestions</button>' +
+              '</div>' +
+              (prepared.length
+                ? '<div class="stack" style="margin-top:.75rem">' + prepared.map(function(item, index){
+                    return '<label class="mini-card" style="display:block">' +
+                      '<div style="display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap">' +
+                        '<span><input type="checkbox" class="'+stateKey+'-ocr-check" data-index="'+index+'"'+(item.canApply ? '' : ' disabled')+'> <strong>'+escapeHtml(item.label)+'</strong></span>' +
+                        '<span class="muted">Confidence: '+escapeHtml(item.confidence)+'</span>' +
+                      '</div>' +
+                      '<div class="muted" style="margin-top:.35rem"><strong>Suggested:</strong> '+escapeText(item.value || '—')+'</div>' +
+                      '<div class="muted"><strong>Current:</strong> '+escapeText(item.currentValue || '—')+'</div>' +
+                      '<div class="muted">'+escapeText(item.reason || '')+'</div>' +
+                      (item.applyHint ? '<div class="muted">'+escapeText(item.applyHint)+'</div>' : '') +
+                    '</label>';
+                  }).join('') + '</div>'
+                : '<p class="muted" style="margin-top:.75rem">No field suggestions were found automatically. You can still read the extracted text below and type the values yourself.</p>'
+              ) +
+              (warnings.length ? '<div class="stack" style="margin-top:.75rem">' + warnings.map(function(text){
+                return '<div class="muted">Warning: ' + escapeText(text) + '</div>';
+              }).join('') + '</div>' : '') +
+              (limitations.length ? '<div class="stack" style="margin-top:.5rem">' + limitations.map(function(text){
+                return '<div class="muted">Note: ' + escapeText(text) + '</div>';
+              }).join('') + '</div>' : '') +
+              '<details style="margin-top:.75rem"><summary>Show extracted text</summary><pre style="white-space:pre-wrap;max-height:18rem;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:.75rem;background:#fff;margin-top:.5rem">'+escapeText(rawText || 'No readable text was returned.')+'</pre></details>' +
+            '</div>';
+          var applyBtn = byId(stateKey + '-ocr-apply');
+          if (applyBtn) {
+            applyBtn.disabled = !prepared.some(function(item){ return item.canApply; });
+            applyBtn.addEventListener('click', function(){
+              applyInvoiceOcrSelections(stateKey, container, target);
+            });
+          }
+        }
+
+        function applyInvoiceOcrSelections(stateKey, container, target){
+          var panelState = stateKey === 'new' ? invoiceNewOcrState : invoiceReviewOcrState;
+          if (!panelState || !container) return;
+          var selectedIndexes = Array.prototype.slice.call(container.querySelectorAll('.' + stateKey + '-ocr-check:checked')).map(function(box){
+            return parseInt(box.getAttribute('data-index') || '-1', 10);
+          }).filter(function(index){ return index >= 0; });
+          if (!selectedIndexes.length) {
+            alert('Tick at least one OCR suggestion first.');
+            return;
+          }
+          var selected = selectedIndexes.map(function(index){ return panelState.prepared[index]; }).filter(Boolean);
+          if (!selected.length) {
+            alert('Tick at least one OCR suggestion first.');
+            return;
+          }
+          var overwriteLabels = selected.filter(function(item){
+            return item.currentValue && String(item.currentValue).trim() && String(item.currentValue).trim() !== String(item.value || '').trim();
+          }).map(function(item){ return item.label; });
+          var confirmMsg = 'Apply ' + selected.length + ' reviewed OCR suggestion(s) to the form now?';
+          if (overwriteLabels.length) confirmMsg += '\n\nThis will change: ' + overwriteLabels.join(', ') + '.';
+          if (!confirm(confirmMsg)) return;
+          selected.forEach(function(item){
+            if (item.field === 'supplierName') {
+              if (target.supplierSelect && item.matchedSupplier) target.supplierSelect.value = item.matchedSupplier.id;
+              return;
+            }
+            var el = target.fields[item.field];
+            if (el && !el.disabled) el.value = item.value;
+          });
+          setInvoiceStatusText('Reviewed OCR suggestions were applied to the form. Please check them, then save manually if correct.');
+        }
+
+        function readInvoiceDocument(request){
+          var invoke = getTauriInvoke();
+          if (!invoke) return Promise.reject(new Error('Invoice OCR works only in the Windows desktop app.'));
+          return invoke('read_invoice_document', { request: request });
+        }
+
+        function runInvoiceOcrForTarget(options){
+          var container = options && options.resultsContainer;
+          var target = options && options.target;
+          if (!container || !target) return Promise.resolve(false);
+          return Promise.resolve().then(function(){
+            if (options.file) {
+              return options.file.arrayBuffer().then(function(buffer){
+                return {
+                  fileName: options.file.name || 'invoice-document',
+                  mimeType: String(options.file.type || ''),
+                  dataBase64: arrayBufferToBase64(buffer)
+                };
+              });
+            }
+            if (options.relativePath) {
+              return {
+                relativePath: options.relativePath,
+                fileName: options.fileName || 'invoice-document',
+                mimeType: String(options.mimeType || '')
+              };
+            }
+            if (options.dataUrl) {
+              return {
+                fileName: options.fileName || 'invoice-document',
+                mimeType: String(options.mimeType || ''),
+                dataBase64: base64FromDataUrl(options.dataUrl)
+              };
+            }
+            throw new Error('Please choose or attach a PDF or photo first.');
+          }).then(function(request){
+            container.innerHTML = '<div class="muted">Reading invoice locally…</div>';
+            return readInvoiceDocument(request).then(function(result){
+              renderInvoiceOcrResult(container, options.stateKey, result, target);
+              setInvoiceStatusText(result && result.message ? result.message : 'Invoice OCR review is ready.');
+              return true;
+            });
+          }).catch(function(err){
+            if (container) {
+              container.innerHTML = '<div class="muted">OCR could not prepare suggestions.</div>';
+            }
+            var msg = 'Invoice OCR could not read this file. ' + ((err && err.message) ? err.message : String(err));
+            setInvoiceStatusText(msg);
+            alert(msg);
+            return false;
+          });
         }
 
         function buildDesktopStateDataBlock(){
@@ -2426,12 +2646,24 @@
               : ''
             ) +
             '<div class="field"><label for="m-inv-file">'+(doc ? 'Replace document (optional)' : 'Attach document (optional)')+'</label><input id="m-inv-file" type="file" accept="application/pdf,image/*" autocomplete="off" /></div>' +
-            '<div id="m-inv-doc-actions" class="actions" style="margin-top:.25rem"></div>';
+            '<div id="m-inv-doc-actions" class="actions" style="margin-top:.25rem"></div>' +
+            '<div class="mini-card" style="margin-top:.75rem">' +
+              '<div class="actions" style="margin:0;flex-wrap:wrap">' +
+                '<button type="button" class="btn" id="m-inv-ocr-btn"'+(desktopIsTauri ? '' : ' disabled')+'>Read invoice with OCR</button>' +
+                '<button type="button" class="btn" id="m-inv-ai-btn" disabled>Optional AI review</button>' +
+                '<span class="muted" id="m-inv-ocr-help">'+(desktopIsTauri ? 'Reads the selected replacement file first. If none is selected, it reads the saved attachment.' : 'Open this invoice in the Windows desktop app to use OCR safely.')+'</span>' +
+              '</div>' +
+              '<div id="m-inv-ocr-results" class="stack"></div>' +
+            '</div>';
 
           var reviewSupplier = byId('m-inv-supplier');
           var reviewPlant = byId('m-inv-plant');
           var reviewType = byId('m-inv-type');
           var docActions = byId('m-inv-doc-actions');
+          var reviewReplacementInput = byId('m-inv-file');
+          var reviewOcrBtn = byId('m-inv-ocr-btn');
+          var reviewAiBtn = byId('m-inv-ai-btn');
+          var reviewOcrResults = byId('m-inv-ocr-results');
           renderSupplierOptions(reviewSupplier, !posted);
           if (reviewSupplier) reviewSupplier.value = inv.supplierId || '';
           if (reviewPlant) {
@@ -2534,6 +2766,47 @@
                 setInvoiceStatusText('Attachment removed from this invoice.');
                 modal.close('submit');
               }
+            });
+          }
+
+          if (reviewReplacementInput) {
+            reviewReplacementInput.addEventListener('change', function(){
+              invoiceReviewOcrState = null;
+              if (reviewOcrResults) reviewOcrResults.innerHTML = '';
+            });
+          }
+          if (reviewOcrBtn) {
+            reviewOcrBtn.addEventListener('click', function(){
+              var replacement = reviewReplacementInput && reviewReplacementInput.files && reviewReplacementInput.files[0] ? reviewReplacementInput.files[0] : null;
+              if (!replacement && !doc) {
+                alert('Attach a PDF or photo first, then click Read invoice with OCR.');
+                return;
+              }
+              runInvoiceOcrForTarget({
+                stateKey: 'review',
+                file: replacement,
+                relativePath: (!replacement && doc && doc.managedRelativePath) ? doc.managedRelativePath : '',
+                dataUrl: (!replacement && doc && doc.dataUrl) ? doc.dataUrl : '',
+                fileName: replacement ? replacement.name : (doc && doc.fileName ? doc.fileName : 'invoice-document'),
+                mimeType: replacement ? String(replacement.type || '') : (doc && doc.mimeType ? doc.mimeType : ''),
+                resultsContainer: reviewOcrResults,
+                target: {
+                  supplierSelect: reviewSupplier,
+                  fields: {
+                    invoiceNumber: byId('m-inv-number'),
+                    invoiceDate: byId('m-inv-date'),
+                    notes: byId('m-inv-notes'),
+                    netAmount: byId('m-inv-net'),
+                    vatAmount: byId('m-inv-vat'),
+                    totalCost: byId('m-inv-total')
+                  }
+                }
+              });
+            });
+          }
+          if (reviewAiBtn) {
+            reviewAiBtn.addEventListener('click', function(){
+              alert('Optional cloud AI review is disabled by default and is not enabled in this release. Local OCR suggestions are still available in the Windows desktop app.');
             });
           }
 
@@ -2710,6 +2983,8 @@
           invoiceFileInput.addEventListener('change', function(ev){
             var file = ev.target && ev.target.files && ev.target.files[0];
             if (!file) { resetInvoiceFileUi(); return; }
+            invoiceNewOcrState = null;
+            if (invoiceOcrResults) invoiceOcrResults.innerHTML = '';
             var mime = String(file.type || '');
             if (!(mime === 'application/pdf' || mime.indexOf('image/') === 0)) {
               alert('Only PDF and image files are supported.');
@@ -2723,6 +2998,40 @@
             reader.readAsDataURL(file);
           });
           invoiceFileInput._bound = true;
+        }
+
+        if (invoiceOcrBtn && !invoiceOcrBtn._bound) {
+          invoiceOcrBtn.addEventListener('click', function(){
+            var file = invoiceFileInput && invoiceFileInput.files && invoiceFileInput.files[0] ? invoiceFileInput.files[0] : null;
+            if (!file) {
+              alert('Attach a PDF or photo first, then click Read invoice with OCR.');
+              return;
+            }
+            runInvoiceOcrForTarget({
+              stateKey: 'new',
+              file: file,
+              resultsContainer: invoiceOcrResults,
+              target: {
+                supplierSelect: byId('inv-supplier'),
+                fields: {
+                  invoiceNumber: byId('inv-number'),
+                  invoiceDate: byId('inv-date'),
+                  notes: byId('inv-notes'),
+                  netAmount: byId('inv-net'),
+                  vatAmount: byId('inv-vat'),
+                  totalCost: byId('inv-total')
+                }
+              }
+            });
+          });
+          invoiceOcrBtn._bound = true;
+        }
+
+        if (invoiceAiBtn && !invoiceAiBtn._bound) {
+          invoiceAiBtn.addEventListener('click', function(){
+            alert('Optional cloud AI review is disabled by default and is not enabled in this release. Local OCR suggestions are still available in the Windows desktop app.');
+          });
+          invoiceAiBtn._bound = true;
         }
 
         if (invoiceForm && !invoiceForm._bound) {
@@ -4023,6 +4332,9 @@
           if (desktopDocsStatus) desktopDocsStatus.textContent = 'Documents folder is available only in desktop mode.';
           if (desktopBackupStatus) desktopBackupStatus.textContent = 'SQLite backup folder is available only in desktop mode.';
           if (invoiceFileHelp) invoiceFileHelp.textContent = 'Storage in the browser is limited. Large files may not be saved locally; invoice details will still be saved.';
+          if (invoiceOcrBtn) invoiceOcrBtn.disabled = true;
+          if (invoiceAiBtn) invoiceAiBtn.disabled = true;
+          if (invoiceOcrHelp) invoiceOcrHelp.textContent = 'Read invoice with OCR is available only in the Windows desktop app.';
           setDesktopMessageText('You can keep using this browser app as normal. To use SQLite, open this same app through the Windows desktop app.');
         }
 
@@ -4050,6 +4362,9 @@
               desktopBackupStatus.textContent = (status.backupsExists ? 'Ready' : 'Created now') + ': ' + status.backupsPath + ' — each dated backup folder contains the database, documents, and manifest.';
             }
             if (invoiceFileHelp) invoiceFileHelp.textContent = 'In the Windows desktop app, the selected PDF or image will be copied into this app’s managed documents folder when you save the invoice.';
+            if (invoiceOcrBtn) invoiceOcrBtn.disabled = false;
+            if (invoiceAiBtn) invoiceAiBtn.disabled = true;
+            if (invoiceOcrHelp) invoiceOcrHelp.textContent = 'Read PDF text locally, or try local Windows OCR for PNG and JPG/JPEG invoice images. Scanned PDFs may still need manual entry.';
             if (!desktopMessageText) {
               setDesktopMessageText('Desktop mode uses SQLite as the live data store after load, import or migration. Browser mode still uses browser storage.');
             } else if (desktopMessage) {
