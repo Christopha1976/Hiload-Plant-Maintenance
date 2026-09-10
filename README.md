@@ -19,7 +19,7 @@ This repository now has **two ways** to run:
   - create a dated desktop backup folder containing the SQLite database, managed invoice documents, and a manifest
   - restore a previous desktop backup folder after creating an automatic safety backup first
 
-## 2) Invoice OCR and optional AI
+## 2) Invoice OCR and optional Local AI
 
 ### What works in this release
 
@@ -37,23 +37,38 @@ This repository now has **two ways** to run:
 - Browser mode keeps working as before, but invoice OCR stays disabled there because browser mode does not use Tauri desktop APIs.
 - In the Linux cloud agent, the Windows image OCR path cannot be exercised directly, so it needs manual Windows testing.
 
-### Optional AI status
+### Optional Local AI (Ollama + Qwen 2.5 1.5B)
 
-- Optional cloud AI review is **disabled by default**.
-- No AI API key is required for normal app use.
-- No AI API key is stored in source code, SQLite backups, or restore data.
-- Cloud providers are **not enabled in this release**. The app shows the future setup/privacy notes only.
+- Local AI is **disabled by default**.
+- No API key is needed for this feature.
+- The app sends **OCR text only** to your **local** Ollama endpoint after you explicitly enable Local AI and click the Local AI review button.
+- The app does **not** send original invoice files/attachments to the model in this feature.
+- Local AI suggestions are shown separately as **Local AI review** suggestions and still require manual tick/apply.
+- The app never auto-saves, auto-posts, auto-creates suppliers, or auto-overwrites invoice fields.
+- OCR-only review remains available as fallback if Local AI is disabled/unavailable.
 
-### Future AI plan
+### Windows setup for Local AI (manual one-invoice-at-a-time)
 
-When optional AI is added later, it should remain a separate opt-in step with these rules:
+1. Install Ollama on the Windows PC and start Ollama.
+2. Set the model folder to `C:\OllamaModels` before downloading the model:
 
-- the user must enable it deliberately in the Windows desktop app;
-- the app must explain that provider charges may apply;
-- the app must explain that invoice text may be sent to that provider;
-- no invoice data may be sent unless the user starts that AI action;
-- all suggested values must still be reviewed and applied manually by the user;
-- secrets/API keys must be stored only in a secure desktop mechanism and never in backups.
+   ```powershell
+   [Environment]::SetEnvironmentVariable("OLLAMA_MODELS","C:\OllamaModels","User")
+   ```
+
+3. Restart Ollama so it picks up `OLLAMA_MODELS`.
+4. Pull the model/tag used in this release:
+
+   ```powershell
+   ollama pull qwen2.5:1.5b-instruct-q4_K_M
+   ```
+
+5. In app **Help → Invoice OCR & Local AI**, click **Check Local AI status** until it reports Ready.
+6. Enable **Local AI invoice interpretation**.
+7. In Invoices, run **Read invoice with OCR**, then click **Ask Local AI to check OCR fields**.
+8. Review evidence/confidence and explicitly apply only the fields you trust, then save manually.
+
+This workflow is intentionally manual and one-invoice-at-a-time for older CPU-only PCs.
 
 ## 3) One-time Windows prerequisites
 
@@ -138,6 +153,10 @@ After build, installer files are in:
 7. If build is slow, wait (first build can take a while).
 8. If OCR says no readable text was found, check whether the PDF contains selectable text. If not, try a clear PNG or JPG photo in the desktop app.
 9. If OCR suggests a wrong value, leave that box unticked and type the correct value manually before saving.
+10. If Local AI says Ollama is not installed, install Ollama first.
+11. If Local AI says service not reachable, start/restart Ollama and click **Check Local AI status** again.
+12. If Local AI says model missing, run `ollama pull qwen2.5:1.5b-instruct-q4_K_M`.
+13. If Local AI times out on an older PC, retry with one invoice at a time and shorter/cleaner OCR text.
 
 ---
 
