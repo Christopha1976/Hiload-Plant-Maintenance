@@ -19,7 +19,7 @@ This repository now has **two ways** to run:
   - create a dated desktop backup folder containing the SQLite database, managed invoice documents, and a manifest
   - restore a previous desktop backup folder after creating an automatic safety backup first
 
-## 2) Invoice OCR and optional Local AI
+## 2) Invoice OCR and batch import
 
 ### What works in this release
 
@@ -27,48 +27,35 @@ This repository now has **two ways** to run:
 - It reads:
   - **PDF** files that already contain selectable text
   - **PNG** and **JPG/JPEG** image files through local Windows OCR when that Windows feature is available
-- OCR only creates **draft suggestions** for supported invoice fields such as supplier name, invoice number, invoice date, notes, subtotal/VAT/total.
+- OCR only creates **draft suggestions** for supported invoice fields such as supplier name, invoice number, invoice date, notes, subtotal/VAT/total, and any reliable plant match.
+- Hiload / Hiload Inyanga Construction is treated as **our company**, not as the supplier.
+- Supplier matching uses OCR text, labels, nearby invoice context, existing supplier names, and local correction history. It does not rely on hard-coded supplier layouts.
+- Totals prefer invoice-total wording such as **Invoice Total**, **Amount Due**, and **Total Due**, while **Due Date**, **VAT**, and **Subtotal** are excluded from the wrong fields.
 - You must **tick the suggestions you want** and click **Apply reviewed suggestions** yourself.
 - You must still **save the invoice manually**. OCR never posts to maintenance and never changes suppliers, payments, or other records automatically.
+
+### PROCESS ALL INVOICES (desktop only)
+
+- Use **PROCESS ALL INVOICES** in the invoice inbox to choose one monthly source folder of your choice.
+- The app scans only that folder (no subfolders by default) for **PDF**, **PNG**, **JPG**, and **JPEG** invoice files.
+- Each file is processed one at a time with the **existing OCR**.
+- Before a draft invoice is created, the app checks:
+  - the managed-document **SHA-256 checksum**
+  - existing **supplier + invoice number** when both were matched reliably
+- On success, the app:
+  - creates a **draft invoice** only
+  - copies the attachment into the app-managed documents folder
+  - places the attachment under a managed **Processed** or **Needs Review** area
+  - removes the source file from the chosen folder **only after** the managed file and database save were both verified
+- On duplicates, unsupported files, OCR failures, save failures, or source-file cleanup failures, the app leaves the original file in the chosen folder and records the reason in the batch report.
+- In the batch report, **Processed** means the draft invoice and managed attachment were saved safely. It does **not** mean posted, approved, paid, or reconciled.
 
 ### Current limitations
 
 - **Scanned image-only PDFs** may return little or no text in this release. If that happens, try a clear PNG/JPG photo or type the values manually.
 - Browser mode keeps working as before, but invoice OCR stays disabled there because browser mode does not use Tauri desktop APIs.
+- **PROCESS ALL INVOICES** is also disabled in browser mode because it needs desktop file access and SQLite.
 - In the Linux cloud agent, the Windows image OCR path cannot be exercised directly, so it needs manual Windows testing.
-
-### Optional Local AI (Ollama + Qwen 2.5 1.5B)
-
-- Local AI is **disabled by default**.
-- No API key is needed for this feature.
-- The app sends **OCR text only** to your **local** Ollama endpoint after you explicitly enable Local AI and click the Local AI review button.
-- The app does **not** send original invoice files/attachments to the model in this feature.
-- Local AI suggestions are shown separately as **Local AI review** suggestions and still require manual tick/apply.
-- The app never auto-saves, auto-posts, auto-creates suppliers, or auto-overwrites invoice fields.
-- OCR-only review remains available as fallback if Local AI is disabled/unavailable.
-
-### Windows setup for Local AI (manual one-invoice-at-a-time)
-
-1. Install Ollama on the Windows PC and start Ollama.
-2. Set the model folder to `C:\OllamaModels` before downloading the model:
-
-   ```powershell
-   [Environment]::SetEnvironmentVariable("OLLAMA_MODELS","C:\OllamaModels","User")
-   ```
-
-3. Restart Ollama so it picks up `OLLAMA_MODELS`.
-4. Pull the model/tag used in this release:
-
-   ```powershell
-   ollama pull qwen2.5:1.5b-instruct-q4_K_M
-   ```
-
-5. In app **Help → Invoice OCR & Local AI**, click **Check Local AI status** until it reports Ready.
-6. Enable **Local AI invoice interpretation**.
-7. In Invoices, run **Read invoice with OCR**, then click **Ask Local AI to check OCR fields**.
-8. Review evidence/confidence and explicitly apply only the fields you trust, then save manually.
-
-This workflow is intentionally manual and one-invoice-at-a-time for older CPU-only PCs.
 
 ## 3) One-time Windows prerequisites
 
@@ -153,10 +140,8 @@ After build, installer files are in:
 7. If build is slow, wait (first build can take a while).
 8. If OCR says no readable text was found, check whether the PDF contains selectable text. If not, try a clear PNG or JPG photo in the desktop app.
 9. If OCR suggests a wrong value, leave that box unticked and type the correct value manually before saving.
-10. If Local AI says Ollama is not installed, install Ollama first.
-11. If Local AI says service not reachable, start/restart Ollama and click **Check Local AI status** again.
-12. If Local AI says model missing, run `ollama pull qwen2.5:1.5b-instruct-q4_K_M`.
-13. If Local AI times out on an older PC, retry with one invoice at a time and shorter/cleaner OCR text.
+10. If a batch import leaves a file in the source folder, open the batch report and read the reason before trying again.
+11. Use **Help → Desktop / Database** backups to protect both the SQLite data and the managed invoice documents, including OCR correction history.
 
 ---
 
