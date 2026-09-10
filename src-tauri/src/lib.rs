@@ -1213,6 +1213,7 @@ fn read_invoice_document_inner(
 
     let mut warnings = Vec::new();
     let normalized_text = normalize_invoice_text(&raw_text);
+    let suggestions = build_invoice_suggestions(&normalized_text);
     if normalized_text.is_empty() {
         warnings.push(
             "No readable text was found. If this is a scanned PDF, try a clear PNG or JPG photo in the Windows desktop app."
@@ -1225,7 +1226,6 @@ fn read_invoice_document_inner(
     } else {
         normalized_text
     };
-    let suggestions = build_invoice_suggestions(&extracted_text);
     let message = if extracted_text.is_empty() {
         "The file was checked, but no readable invoice text was found.".to_string()
     } else if suggestions.is_empty() {

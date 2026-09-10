@@ -2239,11 +2239,19 @@
           if (!confirm(confirmMsg)) return;
           selected.forEach(function(item){
             if (item.field === 'supplierName') {
-              if (target.supplierSelect && item.matchedSupplier) target.supplierSelect.value = item.matchedSupplier.id;
+              if (target.supplierSelect && item.matchedSupplier) {
+                target.supplierSelect.value = item.matchedSupplier.id;
+                target.supplierSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                target.supplierSelect.dispatchEvent(new Event('input', { bubbles: true }));
+              }
               return;
             }
             var el = target.fields[item.field];
-            if (el && !el.disabled) el.value = item.value;
+            if (el && !el.disabled) {
+              el.value = item.value;
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
           });
           setInvoiceStatusText('Reviewed OCR suggestions were applied to the form. Please check them, then save manually if correct.');
         }
