@@ -1,28 +1,20 @@
-# Hiload Plant Maintenance (Browser + First Windows Desktop Foundation)
+# Hiload Plant Maintenance (Browser + Windows Desktop SQLite)
 
 This repository now has **two ways** to run:
 
-1. **Browser app (existing):** open `Hiload Plant Latest.html` directly.
-2. **Windows desktop foundation (new):** Tauri 2 + SQLite wrapper around the same app.
+1. **Browser app:** open `Hiload Plant Latest.html` directly.
+2. **Windows desktop app:** Tauri 2 + SQLite around the same app.
 
-## 1) What this PR adds (and what it does not yet do)
+## 1) What the desktop app does now
 
-### Added now
-- Tauri 2 desktop project scaffold (`package.json` + `src-tauri/`)
-- Local SQLite database in your Windows app-data folder
-- Automatic creation of:
-  - SQLite database file
-  - `documents/` folder (for future invoice files)
-  - `backups/` folder
-- New **Help → Desktop / Database** section in the app
-- Desktop command to import old browser `.json` backup into SQLite
-- Desktop command to create a SQLite backup copy
-
-### Not yet automated in this first desktop foundation
-- Daily screens (Sites, Plant, Hire, Maintenance, Invoices) still save to **browser local storage** for now
-- No email inbox integration yet
-- No OCR yet
-- No cloud APIs/local AI extraction yet
+- In the **Windows desktop app**, SQLite is now the **live day-to-day data store**.
+- On desktop startup, the app loads Sites, Plant, Hires, Maintenance, Suppliers, Invoices, invoice documents, meters, service settings, rate models, alerts, and site totals from SQLite.
+- Normal add/edit/delete/import/reset actions in desktop mode now save back to SQLite automatically.
+- In **browser mode**, the app still uses normal browser local storage and does not depend on Tauri or SQLite.
+- **Help → Desktop / Database** now lets you:
+  - reload live data from SQLite
+  - import a browser `.json` backup into SQLite and refresh the visible screens
+  - create a SQLite backup copy
 
 ## 2) One-time Windows prerequisites
 
@@ -42,21 +34,33 @@ Install these once on the Windows PC that will build the desktop app:
 
 ## 4) Install project dependencies
 
-Run:
+Run one of these:
 
 ```bash
 npm install
 ```
 
+If PowerShell blocks `npm`, use:
+
+```bash
+npm.cmd install
+```
+
 ## 5) Run desktop app in development mode
 
-Run:
+Run one of these:
 
 ```bash
 npm run tauri dev
 ```
 
-This opens the Windows desktop app using your existing HTML workflow.
+If you are using PowerShell, use:
+
+```bash
+npm.cmd run tauri dev
+```
+
+This opens the Windows desktop app using the same screens and workflow.
 
 ## 6) Build the Windows installer
 
@@ -73,11 +77,14 @@ After build, installer files are in:
 ## 7) Move old browser data into SQLite and back up
 
 1. In browser mode, export your old data from **Help → Export data (.json)**.
-2. Start desktop app (`npm run tauri dev` or installed app).
+2. Start desktop app (`npm run tauri dev`, `npm.cmd run tauri dev`, or installed app).
 3. Open **Help → Desktop / Database**.
-4. Click **Import Browser Backup into SQLite** and select your `.json` backup.
-5. Use **Create SQLite backup copy** to create a backup of the desktop database.
-6. The screen shows where your database, documents folder, and backups folder are located.
+4. If SQLite is empty but this device already has browser-style data, the desktop app will offer to copy that data into SQLite.
+5. Or click **Import Browser Backup into SQLite** and select your `.json` backup.
+6. The desktop app will reload the visible screens from SQLite so your plants and invoices appear straight away.
+7. Use **Reload live data from SQLite** any time you want to refresh the screen from the database.
+8. Use **Create SQLite backup copy** to create a backup of the desktop database.
+9. The screen shows where your database, documents folder, and backups folder are located.
 
 ## 8) Simple troubleshooting
 
@@ -85,7 +92,8 @@ After build, installer files are in:
 2. If Rust/C++ toolchain errors appear, re-check that Rust and **Desktop development with C++** are installed.
 3. If desktop window does not open, ensure WebView2 Runtime is installed.
 4. If import fails, verify you selected a valid app backup `.json` file.
-5. If build is slow, wait (first build can take a while).
+5. If the desktop app opens but you do not see data, open **Help → Desktop / Database** and confirm it says **Loaded live data from SQLite** or click **Reload live data from SQLite**.
+6. If build is slow, wait (first build can take a while).
 
 ---
 
@@ -95,4 +103,4 @@ You can still run the original app by opening:
 
 - `Hiload Plant Latest.html`
 
-No desktop installation is required for normal browser use.
+No desktop installation is required for normal browser use. Browser mode keeps using browser local storage. The Windows desktop app uses SQLite for daily work, so keep your original JSON backup until you have tested the desktop version a few times successfully.

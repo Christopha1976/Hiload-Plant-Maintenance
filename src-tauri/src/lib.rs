@@ -17,6 +17,9 @@ struct DesktopStatus {
     documents_exists: bool,
     backups_path: String,
     backups_exists: bool,
+    has_live_data: bool,
+    live_data_source: String,
+    live_counts: Value,
 }
 
 #[derive(Serialize)]
@@ -36,12 +39,61 @@ struct BackupResult {
     message: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LiveStateLoadResult {
+    data: Value,
+    source: String,
+    is_empty: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveResult {
+    message: String,
+    saved_at: String,
+    counts: Value,
+}
+
 struct AppPaths {
     app_data_dir: PathBuf,
     db_path: PathBuf,
     documents_dir: PathBuf,
     backups_dir: PathBuf,
 }
+
+const STATE_ARRAY_KEYS: &[&str] = &[
+    "hiph_sites",
+    "hiph_plants",
+    "hiph_hires",
+    "hiph_maintenance",
+    "hiph_suppliers",
+    "hiph_invoices",
+];
+
+const STATE_OBJECT_KEYS: &[&str] = &[
+    "hiph_site_usage",
+    "hiph_meters",
+    "hiph_plant_service",
+    "hiph_rate_models",
+    "hiph_alerts",
+    "hiph_invoice_docs",
+];
+
+const STATE_KEYS: &[&str] = &[
+    "hiph_sites",
+    "hiph_plants",
+    "hiph_hires",
+    "hiph_maintenance",
+    "hiph_site_usage",
+    "hiph_meters",
+    "hiph_plant_service",
+    "hiph_rate_models",
+    "hiph_alerts",
+    "hiph_suppliers",
+    "hiph_invoices",
+    "hiph_invoice_docs",
+];
 
 fn unix_timestamp_string() -> String {
     match SystemTime::now().duration_since(UNIX_EPOCH) {
@@ -105,6 +157,12 @@ fn ensure_schema(conn: &Connection) -> Result<(), String> {
         CREATE TABLE IF NOT EXISTS app_meta (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS app_state (
+          state_key TEXT PRIMARY KEY,
+          raw_json TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );
 
@@ -188,6 +246,59 @@ fn ensure_schema(conn: &Connection) -> Result<(), String> {
     .map_err(|e| format!("Could not create database schema: {e}"))
 }
 
+fn default_state_value(key: &str) -> Value {
+    if STATE_ARRAY_KEYS.contains(&key) {
+        json!([])
+    } else {
+        json!({})
+    }
+}
+
+fn normalize_backup_data(data: &Map<String, Value>) -> Result<Map<String, Value>, String> {
+    let mut normalized = Map::new();
+
+    for key in STATE_KEYS {
+        let next = match data.get(*key) {
+            Some(Value::Null) | None => default_state_value(key),
+            Some(value) if STATE_ARRAY_KEYS.contains(key) && value.is_array() => value.clone(),
+            Some(value) if STATE_OBJECT_KEYS.contains(key) && value.is_object() => value.clone(),
+            Some(_) if STATE_ARRAY_KEYS.contains(key) => {
+                return Err(format!("Backup field '{key}' must be a list."));
+            }
+            Some(_) if STATE_OBJECT_KEYS.contains(key) => {
+                return Err(format!("Backup field '{key}' must be an object."));
+            }
+            Some(value) => value.clone(),
+        };
+        normalized.insert((*key).to_string(), next);
+    }
+
+    Ok(normalized)
+}
+
+fn has_live_data(data: &Map<String, Value>) -> bool {
+    data.values().any(|value| match value {
+        Value::Array(items) => !items.is_empty(),
+        Value::Object(items) => !items.is_empty(),
+        Value::Null => false,
+        _ => true,
+    })
+}
+
+fn live_counts(data: &Map<String, Value>) -> Value {
+    let mut counts = Map::new();
+    for key in STATE_KEYS {
+        let count = match data.get(*key) {
+            Some(Value::Array(items)) => items.len() as i64,
+            Some(Value::Object(items)) => items.len() as i64,
+            Some(Value::Null) | None => 0,
+            Some(_) => 1,
+        };
+        counts.insert((*key).to_string(), json!(count));
+    }
+    Value::Object(counts)
+}
+
 fn clear_import_tables(tx: &rusqlite::Transaction<'_>) -> Result<(), String> {
     tx.execute("DELETE FROM sites", [])
         .map_err(|e| format!("Could not clear sites: {e}"))?;
@@ -250,6 +361,29 @@ fn value_str(value: &Value, field: &str) -> Option<String> {
 
 fn value_f64(value: &Value, field: &str) -> Option<f64> {
     value.get(field).and_then(Value::as_f64)
+}
+
+fn write_app_state(
+    tx: &rusqlite::Transaction<'_>,
+    data: &Map<String, Value>,
+) -> Result<(), String> {
+    tx.execute("DELETE FROM app_state", [])
+        .map_err(|e| format!("Could not replace app state: {e}"))?;
+
+    let updated_at = unix_timestamp_string();
+    for key in STATE_KEYS {
+        let value = data
+            .get(*key)
+            .cloned()
+            .unwrap_or_else(|| default_state_value(key));
+        tx.execute(
+            "INSERT INTO app_state (state_key, raw_json, updated_at) VALUES (?1, ?2, ?3)",
+            params![key, value.to_string(), updated_at],
+        )
+        .map_err(|e| format!("Could not save app state '{key}': {e}"))?;
+    }
+
+    Ok(())
 }
 
 fn insert_backup_data(
@@ -426,9 +560,172 @@ fn backup_file_name() -> String {
     )
 }
 
+fn read_json_rows_as_array(conn: &Connection, table: &str) -> Result<Vec<Value>, String> {
+    let sql = format!("SELECT raw_json FROM {table} ORDER BY rowid");
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("Could not read {table}: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("Could not query {table}: {e}"))?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        let raw = row.map_err(|e| format!("Could not read {table} row: {e}"))?;
+        let parsed =
+            serde_json::from_str(&raw).map_err(|e| format!("Could not parse {table} JSON: {e}"))?;
+        items.push(parsed);
+    }
+    Ok(items)
+}
+
+fn read_json_rows_as_object(
+    conn: &Connection,
+    table: &str,
+    key_column: &str,
+) -> Result<Map<String, Value>, String> {
+    let sql = format!("SELECT {key_column}, raw_json FROM {table}");
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("Could not read {table}: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| format!("Could not query {table}: {e}"))?;
+
+    let mut items = Map::new();
+    for row in rows {
+        let (key, raw) = row.map_err(|e| format!("Could not read {table} row: {e}"))?;
+        let parsed =
+            serde_json::from_str(&raw).map_err(|e| format!("Could not parse {table} JSON: {e}"))?;
+        items.insert(key, parsed);
+    }
+    Ok(items)
+}
+
+fn read_app_state(conn: &Connection) -> Result<Option<Map<String, Value>>, String> {
+    let mut stmt = conn
+        .prepare("SELECT state_key, raw_json FROM app_state")
+        .map_err(|e| format!("Could not read app state: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| format!("Could not query app state: {e}"))?;
+
+    let mut data = Map::new();
+    for row in rows {
+        let (key, raw) = row.map_err(|e| format!("Could not read app state row: {e}"))?;
+        let parsed = serde_json::from_str(&raw)
+            .map_err(|e| format!("Could not parse app state JSON for '{key}': {e}"))?;
+        data.insert(key, parsed);
+    }
+
+    if data.is_empty() {
+        return Ok(None);
+    }
+
+    normalize_backup_data(&data).map(Some)
+}
+
+fn read_legacy_state(conn: &Connection) -> Result<Map<String, Value>, String> {
+    let mut data = Map::new();
+    data.insert(
+        "hiph_sites".to_string(),
+        Value::Array(read_json_rows_as_array(conn, "sites")?),
+    );
+    data.insert(
+        "hiph_plants".to_string(),
+        Value::Array(read_json_rows_as_array(conn, "plants")?),
+    );
+    data.insert(
+        "hiph_hires".to_string(),
+        Value::Array(read_json_rows_as_array(conn, "hires")?),
+    );
+    data.insert(
+        "hiph_maintenance".to_string(),
+        Value::Array(read_json_rows_as_array(conn, "maintenance")?),
+    );
+    data.insert(
+        "hiph_suppliers".to_string(),
+        Value::Array(read_json_rows_as_array(conn, "suppliers")?),
+    );
+    data.insert(
+        "hiph_invoices".to_string(),
+        Value::Array(read_json_rows_as_array(conn, "invoices")?),
+    );
+    data.insert(
+        "hiph_invoice_docs".to_string(),
+        Value::Object(read_json_rows_as_object(
+            conn,
+            "invoice_documents",
+            "invoice_id",
+        )?),
+    );
+    data.insert(
+        "hiph_meters".to_string(),
+        Value::Object(read_json_rows_as_object(conn, "meters", "key")?),
+    );
+    data.insert(
+        "hiph_plant_service".to_string(),
+        Value::Object(read_json_rows_as_object(
+            conn,
+            "service_settings",
+            "plant_id",
+        )?),
+    );
+    data.insert(
+        "hiph_site_usage".to_string(),
+        Value::Object(read_json_rows_as_object(
+            conn,
+            "site_usage_totals",
+            "site_id",
+        )?),
+    );
+    data.insert("hiph_rate_models".to_string(), json!({}));
+    data.insert("hiph_alerts".to_string(), json!({}));
+
+    normalize_backup_data(&data)
+}
+
+fn load_live_state(conn: &Connection) -> Result<(Map<String, Value>, String), String> {
+    if let Some(data) = read_app_state(conn)? {
+        return Ok((data, "app_state".to_string()));
+    }
+
+    let legacy = read_legacy_state(conn)?;
+    if has_live_data(&legacy) {
+        return Ok((legacy, "legacy_tables".to_string()));
+    }
+
+    Ok((normalize_backup_data(&Map::new())?, "empty".to_string()))
+}
+
+fn replace_live_state(
+    tx: &rusqlite::Transaction<'_>,
+    data: &Map<String, Value>,
+    source: &str,
+) -> Result<Value, String> {
+    let normalized = normalize_backup_data(data)?;
+    clear_import_tables(tx)?;
+    let counts = insert_backup_data(tx, &normalized)?;
+    write_app_state(tx, &normalized)?;
+
+    tx.execute(
+        "INSERT OR REPLACE INTO app_meta (key, value, updated_at) VALUES (?1, ?2, ?3)",
+        params!["last_live_state_source", source, unix_timestamp_string()],
+    )
+    .map_err(|e| format!("Could not update live state metadata: {e}"))?;
+
+    Ok(counts)
+}
+
 #[tauri::command]
 fn desktop_status(app: AppHandle) -> Result<DesktopStatus, String> {
     let paths = ensure_storage_and_schema(&app)?;
+    let conn = open_db(&paths.db_path)?;
+    let (data, source) = load_live_state(&conn)?;
 
     Ok(DesktopStatus {
         is_desktop: true,
@@ -438,6 +735,55 @@ fn desktop_status(app: AppHandle) -> Result<DesktopStatus, String> {
         documents_exists: paths.documents_dir.exists(),
         backups_path: paths.backups_dir.to_string_lossy().to_string(),
         backups_exists: paths.backups_dir.exists(),
+        has_live_data: has_live_data(&data),
+        live_data_source: source,
+        live_counts: live_counts(&data),
+    })
+}
+
+#[tauri::command]
+fn load_live_state_from_sqlite(app: AppHandle) -> Result<LiveStateLoadResult, String> {
+    let paths = ensure_storage_and_schema(&app)?;
+    let conn = open_db(&paths.db_path)?;
+    let (data, source) = load_live_state(&conn)?;
+
+    Ok(LiveStateLoadResult {
+        is_empty: !has_live_data(&data),
+        source,
+        data: Value::Object(data),
+    })
+}
+
+#[tauri::command]
+fn save_live_state_to_sqlite(
+    app: AppHandle,
+    data: Value,
+    source: Option<String>,
+) -> Result<SaveResult, String> {
+    let data = get_data_block(&data)?;
+    let paths = ensure_storage_and_schema(&app)?;
+    let mut conn = open_db(&paths.db_path)?;
+    ensure_schema(&conn)?;
+
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Could not start save transaction: {e}"))?;
+    let counts = replace_live_state(&tx, data, source.as_deref().unwrap_or("desktop_app"))?;
+    let saved_at = unix_timestamp_string();
+
+    tx.execute(
+        "INSERT OR REPLACE INTO app_meta (key, value, updated_at) VALUES (?1, ?2, ?3)",
+        params!["last_live_state_saved_at", saved_at, saved_at],
+    )
+    .map_err(|e| format!("Could not store save metadata: {e}"))?;
+
+    tx.commit()
+        .map_err(|e| format!("Could not commit saved data: {e}"))?;
+
+    Ok(SaveResult {
+        message: "Saved live desktop data to SQLite.".to_string(),
+        saved_at,
+        counts,
     })
 }
 
@@ -487,8 +833,7 @@ fn import_browser_backup_into_sqlite(
         .transaction()
         .map_err(|e| format!("Could not start import transaction: {e}"))?;
 
-    clear_import_tables(&tx)?;
-    let counts = insert_backup_data(&tx, data)?;
+    let counts = replace_live_state(&tx, data, "browser_backup_import")?;
     let imported_at = unix_timestamp_string();
 
     tx.execute(
@@ -543,6 +888,8 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             desktop_status,
+            load_live_state_from_sqlite,
+            save_live_state_to_sqlite,
             import_browser_backup_into_sqlite,
             export_sqlite_backup
         ])
@@ -553,4 +900,117 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_state() -> Map<String, Value> {
+        let mut data = Map::new();
+        data.insert(
+            "hiph_sites".to_string(),
+            json!([{ "id": "s_1", "name": "Main Site", "location": "Yard" }]),
+        );
+        data.insert(
+            "hiph_plants".to_string(),
+            json!([{ "id": "p_1", "name": "Excavator", "category": "yellow" }]),
+        );
+        data.insert(
+            "hiph_hires".to_string(),
+            json!([{ "id": "h_1", "siteId": "s_1", "plantId": "p_1", "startDate": "2026-09-01" }]),
+        );
+        data.insert(
+            "hiph_maintenance".to_string(),
+            json!([{ "id": "m_1", "plantId": "p_1", "supplierId": "sup_1", "invoiceId": "inv_1", "date": "2026-09-02", "type": "service", "cost": 2500.0, "meterAtService": 0 }]),
+        );
+        data.insert(
+            "hiph_site_usage".to_string(),
+            json!({ "s_1": { "plants": { "p_1": 4 }, "history": [] } }),
+        );
+        data.insert(
+            "hiph_meters".to_string(),
+            json!({ "p_1": { "2026-09": 1450 } }),
+        );
+        data.insert(
+            "hiph_plant_service".to_string(),
+            json!({ "p_1": { "reminders": [], "licenseRenewal": "" } }),
+        );
+        data.insert(
+            "hiph_rate_models".to_string(),
+            json!({ "p_1": { "unit": "day", "rate": "500.00" } }),
+        );
+        data.insert("hiph_alerts".to_string(), json!({ "overdue": [] }));
+        data.insert(
+            "hiph_suppliers".to_string(),
+            json!([{ "id": "sup_1", "name": "ServiceCo" }]),
+        );
+        data.insert(
+            "hiph_invoices".to_string(),
+            json!([{ "id": "inv_1", "supplierId": "sup_1", "plantId": "p_1", "invoiceNumber": "1001", "invoiceDate": "2026-09-02", "totalCost": 2500.0, "status": "posted", "hasDocument": true }]),
+        );
+        data.insert(
+            "hiph_invoice_docs".to_string(),
+            json!({ "inv_1": { "fileName": "invoice.pdf", "mimeType": "application/pdf", "size": 12, "dataUrl": "data:application/pdf;base64,AAAA" } }),
+        );
+        data
+    }
+
+    #[test]
+    fn normalize_backup_data_adds_missing_defaults() {
+        let data = Map::from_iter([(
+            "hiph_sites".to_string(),
+            json!([{ "id": "s_1", "name": "Main Site" }]),
+        )]);
+
+        let normalized = normalize_backup_data(&data).expect("state should normalize");
+
+        assert_eq!(normalized["hiph_sites"][0]["id"], "s_1");
+        assert_eq!(normalized["hiph_plants"], json!([]));
+        assert_eq!(normalized["hiph_alerts"], json!({}));
+    }
+
+    #[test]
+    fn replace_live_state_round_trips_full_state() {
+        let mut conn = Connection::open_in_memory().expect("memory db");
+        ensure_schema(&conn).expect("schema");
+        let data = sample_state();
+
+        let tx = conn.transaction().expect("transaction");
+        let counts = replace_live_state(&tx, &data, "test_save").expect("save state");
+        tx.commit().expect("commit");
+
+        assert_eq!(counts["plants"], json!(1));
+        assert_eq!(counts["invoiceDocuments"], json!(1));
+
+        let (loaded, source) = load_live_state(&conn).expect("load state");
+        assert_eq!(source, "app_state");
+        assert_eq!(loaded.get("hiph_rate_models"), data.get("hiph_rate_models"));
+        assert_eq!(loaded["hiph_maintenance"][0]["invoiceId"], json!("inv_1"));
+        assert_eq!(
+            loaded["hiph_invoice_docs"]["inv_1"]["fileName"],
+            json!("invoice.pdf")
+        );
+    }
+
+    #[test]
+    fn load_live_state_falls_back_to_legacy_tables() {
+        let mut conn = Connection::open_in_memory().expect("memory db");
+        ensure_schema(&conn).expect("schema");
+        let data = sample_state();
+
+        let tx = conn.transaction().expect("transaction");
+        clear_import_tables(&tx).expect("clear tables");
+        insert_backup_data(&tx, &data).expect("insert legacy data");
+        tx.commit().expect("commit");
+
+        let (loaded, source) = load_live_state(&conn).expect("load state");
+        assert_eq!(source, "legacy_tables");
+        assert_eq!(loaded["hiph_sites"][0]["name"], json!("Main Site"));
+        assert_eq!(loaded["hiph_alerts"], json!({}));
+        assert_eq!(
+            loaded["hiph_invoice_docs"]["inv_1"]["mimeType"],
+            json!("application/pdf")
+        );
+    }
 }
