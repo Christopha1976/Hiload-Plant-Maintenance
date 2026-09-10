@@ -417,7 +417,7 @@
       <!-- INVOICES -->
       <section id="invoices" class="view" tabindex="-1" aria-labelledby="inv-h2">
         <h2 id="inv-h2">Invoices</h2>
-        <p class="muted">Capture supplier invoices manually in this browser. Posting an invoice will create a linked maintenance entry.</p>
+        <p class="muted">Capture supplier invoices and review OCR suggestions here. Posting an invoice still creates a linked maintenance entry only after you review and choose to post it yourself.</p>
 
         <div class="grid-2">
           <div class="card hidden" id="invoice-new-card" data-subview="invoice-new">
@@ -432,11 +432,9 @@
               <div id="inv-file-preview" class="stack"></div>
               <div class="actions" style="margin-top:.25rem;flex-wrap:wrap">
                 <button type="button" class="btn" id="inv-ocr-btn" disabled>Read invoice with OCR</button>
-                <button type="button" class="btn" id="inv-ai-btn" disabled>Ask Local AI to check OCR fields</button>
                 <span class="muted" id="inv-ocr-help">Open this app in the Windows desktop version to read invoices locally.</span>
               </div>
               <div id="inv-ocr-results" class="stack"></div>
-              <div id="inv-ai-results" class="stack"></div>
               <p class="muted" id="invoice-status-message">Invoice attachment status messages will appear here.</p>
               <div class="inline" style="flex-wrap:wrap;gap:.75rem">
                 <div class="field" style="min-width:220px;flex:1 1 220px">
@@ -523,8 +521,10 @@
               </div>
               <div class="actions" style="margin:0">
                 <button type="button" class="btn" id="inv-filter-clear">Clear</button>
+                <button type="button" class="btn" id="inv-batch-btn" disabled>PROCESS ALL INVOICES</button>
               </div>
             </div>
+            <div id="inv-batch-results" class="stack" style="margin-bottom:.75rem"></div>
             <div class="table-wrap">
               <table class="table" id="invoice-table" aria-label="Invoice inbox">
                 <thead>
@@ -671,8 +671,8 @@
                 <p class="muted" style="margin:.25rem 0 0">Reports → Site • Month or Whole Contract. Weekends excluded for day rates. Enter Hours for per‑hour and KMs for per‑km lines before Print/PDF. You can save monthly results to the site’s lifetime totals.</p>
               </div>
               <div>
-                <strong>7) Invoice Inbox (manual pre-conversion)</strong>
-                <p class="muted" style="margin:.25rem 0 0">Invoices → New Invoice lets you attach a PDF/image and capture supplier, invoice number/date, plant, maintenance type and amount fields. In the Windows desktop app, attachments are copied into the app’s documents folder so they survive restarts and backups. Use Read invoice with OCR to draft suggestions, review them carefully, apply only the values you want, then save normally. OCR and any future AI review never post or save an invoice automatically.</p>
+                <strong>7) Invoice Inbox and batch OCR review</strong>
+                <p class="muted" style="margin:.25rem 0 0">Invoices → New Invoice lets you attach a PDF/image and capture supplier, invoice number/date, plant, maintenance type and amount fields. In the Windows desktop app, attachments are copied into the app’s documents folder so they survive restarts and backups. Use Read invoice with OCR to draft suggestions, review them carefully, apply only the values you want, then save normally. PROCESS ALL INVOICES lets you choose one monthly source folder, read each supported invoice with the existing OCR, create reviewable draft invoices, copy the attachment into the app-managed Processed or Needs Review area, and only then remove the source file if everything was saved safely.</p>
               </div>
               <div>
                 <strong>Printing</strong>
@@ -697,41 +697,22 @@
           </div>
 
           <div class="card">
-            <h3>Invoice OCR &amp; Local AI (optional)</h3>
+            <h3>Invoice OCR &amp; batch processing</h3>
             <div class="stack">
-              <p class="muted" style="margin:0">Local invoice reading works only in the Windows desktop app. OCR suggestions and Local AI suggestions are always review-only. Nothing is auto-saved, auto-posted, or auto-applied.</p>
-              <label class="muted" style="display:flex;gap:.5rem;align-items:flex-start">
-                <input type="checkbox" id="local-ai-enabled-toggle" />
-                <span><strong>Enable local AI invoice interpretation</strong> (disabled by default)</span>
-              </label>
-              <div class="inline" style="flex-wrap:wrap;gap:.75rem">
-                <div class="field" style="min-width:260px;flex:1 1 260px">
-                  <label for="local-ai-model">Local model tag</label>
-                  <input id="local-ai-model" value="qwen2.5:1.5b-instruct-q4_K_M" autocomplete="off" />
-                </div>
-                <div class="field" style="min-width:260px;flex:1 1 260px">
-                  <label for="local-ai-model-dir">Model folder</label>
-                  <input id="local-ai-model-dir" value="C:\OllamaModels" autocomplete="off" />
-                </div>
-              </div>
-              <div class="actions">
-                <button id="local-ai-save-btn" type="button" class="btn">Save Local AI settings</button>
-                <button id="local-ai-refresh-btn" type="button" class="btn">Check Local AI status</button>
+              <p class="muted" style="margin:0">Local invoice reading works only in the Windows desktop app. OCR suggestions stay review-only. Nothing is auto-posted, auto-paid, or silently overwritten.</p>
+              <div class="mini-card">
+                <strong>Single invoice review</strong>
+                <div class="muted">Use Read invoice with OCR on one saved attachment or one newly selected file. The app suggests supplier, invoice number/date, description, totals, and any reliable plant match together with evidence and confidence.</div>
               </div>
               <div class="mini-card">
-                <strong>Status:</strong>
-                <div class="muted" id="local-ai-status-text">Checking Local AI status…</div>
+                <strong>PROCESS ALL INVOICES</strong>
+                <div class="muted">Choose any monthly source folder that holds your PDF, PNG, JPG, or JPEG invoices. The app scans only that folder (not subfolders), reads one file at a time with the existing OCR, checks duplicates by checksum and by supplier + invoice number when reliable, creates draft invoices only, copies attachments into the app-managed Processed or Needs Review area, and removes the source file only after both the invoice record and managed attachment were saved safely.</div>
               </div>
-              <p class="muted" style="margin:0">Local AI uses <strong>OCR text only</strong>. This feature does not send original invoice files/attachments to the model.</p>
-              <p class="muted" style="margin:0">Windows setup (manual, recommended):</p>
-              <pre style="white-space:pre-wrap;border:1px solid var(--border);border-radius:10px;padding:.75rem;background:#fff;margin:0">1) Install Ollama for Windows and start it.
-2) In PowerShell:
-   [Environment]::SetEnvironmentVariable("OLLAMA_MODELS","C:\OllamaModels","User")
-3) Restart Ollama.
-4) Pull the model:
-   ollama pull qwen2.5:1.5b-instruct-q4_K_M
-5) Return here, click Check Local AI status, then enable Local AI.</pre>
-              <p class="muted" style="margin:0">On older CPU-only PCs this step can be slow. Run one invoice at a time and wait for each review to finish.</p>
+              <div class="mini-card">
+                <strong>When the app keeps a file in the source folder</strong>
+                <div class="muted">Possible duplicates, unsupported files, OCR/read failures, save failures, and source-file cleanup failures are all logged in plain English and the original file is left in the selected folder for you to inspect.</div>
+              </div>
+              <p class="muted" style="margin:0">Desktop backups include the SQLite database, managed invoice documents, and OCR correction history together. Browser mode stays usable, but batch folder processing is disabled there with plain-English guidance.</p>
             </div>
           </div>
 
@@ -1965,10 +1946,10 @@
         var invoiceFileMeta = byId('inv-file-meta');
         var invoiceFilePreview = byId('inv-file-preview');
         var invoiceOcrBtn = byId('inv-ocr-btn');
-        var invoiceAiBtn = byId('inv-ai-btn');
         var invoiceOcrHelp = byId('inv-ocr-help');
         var invoiceOcrResults = byId('inv-ocr-results');
-        var invoiceAiResults = byId('inv-ai-results');
+        var invoiceBatchBtn = byId('inv-batch-btn');
+        var invoiceBatchResults = byId('inv-batch-results');
         var invoiceStatusMessage = byId('invoice-status-message');
         var invoiceTableBody = $('#invoice-table tbody');
         var invoiceFilterStatusSel = byId('inv-filter-status');
@@ -1980,9 +1961,6 @@
         var invoiceFilter = { status: 'all', supplierId: 'all', plantId: 'all' };
         var invoiceNewOcrState = null;
         var invoiceReviewOcrState = null;
-        var invoiceNewLocalAiState = null;
-        var invoiceReviewLocalAiState = null;
-        var localAiReady = false;
 
         function setInvoiceStatusText(text){
           if (invoiceStatusMessage) invoiceStatusMessage.textContent = String(text || '');
@@ -2121,9 +2099,7 @@
           if (invoiceFileMeta) invoiceFileMeta.textContent = 'No file selected.';
           if (invoiceFilePreview) invoiceFilePreview.innerHTML = '';
           invoiceNewOcrState = null;
-          invoiceNewLocalAiState = null;
           if (invoiceOcrResults) invoiceOcrResults.innerHTML = '';
-          if (invoiceAiResults) invoiceAiResults.innerHTML = '';
         }
 
         function arrayBufferToBase64(buffer){
@@ -2164,6 +2140,9 @@
             var supplier = findSupplierById(target.supplierSelect ? target.supplierSelect.value : '');
             return supplier ? supplier.name : '';
           }
+          if (field === 'plantId') {
+            return plantNameById(target.plantSelect ? target.plantSelect.value : '');
+          }
           var el = target.fields[field];
           if (!el) return '';
           return String(el.value || '').trim();
@@ -2197,6 +2176,15 @@
               } else {
                 next.applyHint = 'Will select existing supplier: ' + next.matchedSupplier.name;
               }
+            } else if (next.field === 'plantId') {
+              next.matchedPlant = state.plants.find(function(p){ return p.id === next.value; }) || null;
+              next.displayValue = next.matchedPlant ? displayNameWithReg(next.matchedPlant) : next.value;
+              if (!next.matchedPlant) {
+                next.canApply = false;
+                next.applyHint = 'No reliable existing plant match is available for this OCR suggestion.';
+              } else {
+                next.applyHint = 'Will select existing plant: ' + displayNameWithReg(next.matchedPlant);
+              }
             } else if (!next.canApply) {
               next.applyHint = 'This field is locked on this invoice.';
             }
@@ -2225,7 +2213,7 @@
                         '<span><input type="checkbox" class="'+stateKey+'-ocr-check" data-index="'+index+'"'+(item.canApply ? '' : ' disabled')+'> <strong>'+escapeHtml(item.label)+'</strong></span>' +
                         '<span class="muted">Confidence: '+escapeHtml(item.confidence)+'</span>' +
                       '</div>' +
-                      '<div class="muted" style="margin-top:.35rem"><strong>Suggested:</strong> '+escapeText(item.value || '—')+'</div>' +
+                      '<div class="muted" style="margin-top:.35rem"><strong>Suggested:</strong> '+escapeText(item.displayValue || item.value || '—')+'</div>' +
                       '<div class="muted"><strong>Current:</strong> '+escapeText(item.currentValue || '—')+'</div>' +
                       (item.evidence ? '<div class="muted"><strong>Evidence:</strong> '+escapeText(item.evidence)+'</div>' : '') +
                       '<div class="muted">'+escapeText(item.reason || '')+'</div>' +
@@ -2281,88 +2269,11 @@
               }
               return;
             }
-            var el = target.fields[item.field];
-            if (el && !el.disabled) {
-              el.value = item.value;
-              el.dispatchEvent(new Event('input', { bubbles: true }));
-              el.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-          });
-          setInvoiceStatusText('Reviewed OCR suggestions were applied to the form. Please check them, then save manually if correct.');
-        }
-
-        function renderInvoiceLocalAiResult(container, stateKey, result, target){
-          if (!container) return;
-          var prepared = prepareOcrSuggestionsForTarget(result, target);
-          var warnings = Array.isArray(result && result.warnings) ? result.warnings : [];
-          var limitations = Array.isArray(result && result.limitations) ? result.limitations : [];
-          if (stateKey === 'new') invoiceNewLocalAiState = { result: result, prepared: prepared };
-          else invoiceReviewLocalAiState = { result: result, prepared: prepared };
-          container.innerHTML =
-            '<div class="mini-card" style="margin-top:.5rem">' +
-              '<div style="display:flex;gap:.5rem;justify-content:space-between;align-items:flex-start;flex-wrap:wrap">' +
-                '<div><strong>Local AI review</strong><div class="muted" style="margin-top:.25rem">'+escapeHtml(result && result.message ? result.message : 'Review Local AI suggestions carefully.')+'</div></div>' +
-                '<button type="button" class="btn primary" id="'+stateKey+'-ai-apply">Apply Local AI suggestions</button>' +
-              '</div>' +
-              (prepared.length
-                ? '<div class="stack" style="margin-top:.75rem">' + prepared.map(function(item, index){
-                    return '<label class="mini-card" style="display:block">' +
-                      '<div style="display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap">' +
-                        '<span><input type="checkbox" class="'+stateKey+'-ai-check" data-index="'+index+'"'+(item.canApply ? '' : ' disabled')+'> <strong>'+escapeHtml(item.label)+'</strong></span>' +
-                        '<span class="muted">Confidence: '+escapeHtml(item.confidence)+'</span>' +
-                      '</div>' +
-                      '<div class="muted" style="margin-top:.35rem"><strong>Suggested:</strong> '+escapeText(item.value || '—')+'</div>' +
-                      '<div class="muted"><strong>Current:</strong> '+escapeText(item.currentValue || '—')+'</div>' +
-                      (item.evidence ? '<div class="muted"><strong>Evidence:</strong> '+escapeText(item.evidence)+'</div>' : '') +
-                      '<div class="muted">'+escapeText(item.reason || '')+'</div>' +
-                      (item.applyHint ? '<div class="muted">'+escapeText(item.applyHint)+'</div>' : '') +
-                    '</label>';
-                  }).join('') + '</div>'
-                : '<p class="muted" style="margin-top:.75rem">No Local AI suggestions were accepted safely from OCR text.</p>'
-              ) +
-              (warnings.length ? '<div class="stack" style="margin-top:.75rem">' + warnings.map(function(text){
-                return '<div class="muted">Warning: ' + escapeText(text) + '</div>';
-              }).join('') + '</div>' : '') +
-              (limitations.length ? '<div class="stack" style="margin-top:.5rem">' + limitations.map(function(text){
-                return '<div class="muted">Note: ' + escapeText(text) + '</div>';
-              }).join('') + '</div>' : '') +
-            '</div>';
-          var applyBtn = byId(stateKey + '-ai-apply');
-          if (applyBtn) {
-            applyBtn.disabled = !prepared.some(function(item){ return item.canApply; });
-            applyBtn.addEventListener('click', function(){
-              applyInvoiceLocalAiSelections(stateKey, container, target);
-            });
-          }
-        }
-
-        function applyInvoiceLocalAiSelections(stateKey, container, target){
-          var panelState = stateKey === 'new' ? invoiceNewLocalAiState : invoiceReviewLocalAiState;
-          if (!panelState || !container) return;
-          var selectedIndexes = Array.prototype.slice.call(container.querySelectorAll('.' + stateKey + '-ai-check:checked')).map(function(box){
-            return parseInt(box.getAttribute('data-index') || '-1', 10);
-          }).filter(function(index){ return index >= 0; });
-          if (!selectedIndexes.length) {
-            alert('Tick at least one Local AI suggestion first.');
-            return;
-          }
-          var selected = selectedIndexes.map(function(index){ return panelState.prepared[index]; }).filter(Boolean);
-          if (!selected.length) {
-            alert('Tick at least one Local AI suggestion first.');
-            return;
-          }
-          var overwriteLabels = selected.filter(function(item){
-            return item.currentValue && String(item.currentValue).trim() && String(item.currentValue).trim() !== String(item.value || '').trim();
-          }).map(function(item){ return item.label; });
-          var confirmMsg = 'Apply ' + selected.length + ' Local AI suggestion(s) to the form now?';
-          if (overwriteLabels.length) confirmMsg += '\n\nThis will change: ' + overwriteLabels.join(', ') + '.';
-          if (!confirm(confirmMsg)) return;
-          selected.forEach(function(item){
-            if (item.field === 'supplierName') {
-              if (target.supplierSelect && item.matchedSupplier) {
-                target.supplierSelect.value = item.matchedSupplier.id;
-                target.supplierSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                target.supplierSelect.dispatchEvent(new Event('input', { bubbles: true }));
+            if (item.field === 'plantId') {
+              if (target.plantSelect && item.matchedPlant) {
+                target.plantSelect.value = item.matchedPlant.id;
+                target.plantSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                target.plantSelect.dispatchEvent(new Event('input', { bubbles: true }));
               }
               return;
             }
@@ -2373,7 +2284,7 @@
               el.dispatchEvent(new Event('change', { bubbles: true }));
             }
           });
-          setInvoiceStatusText('Reviewed Local AI suggestions were applied to the form. Please check them, then save manually if correct.');
+          setInvoiceStatusText('Reviewed OCR suggestions were applied to the form. Please check them, then save manually if correct.');
         }
 
         function readInvoiceDocument(request){
@@ -2382,20 +2293,29 @@
           return invoke('read_invoice_document', { request: request });
         }
 
-        function reviewInvoiceOcrTextWithLocalAi(ocrText){
+        function recordInvoiceOcrFeedback(panelState, values){
           var invoke = getTauriInvoke();
-          if (!invoke) return Promise.reject(new Error('Local AI review works only in the Windows desktop app.'));
-          return invoke('review_invoice_ocr_text_with_local_ai', { request: { ocrText: String(ocrText || '') } });
+          if (!invoke || !panelState || !panelState.result) return Promise.resolve(false);
+          var suggestions = Array.isArray(panelState.result.suggestions) ? panelState.result.suggestions : [];
+          var supplierSuggestion = suggestions.find(function(item){ return item && item.field === 'supplierName'; }) || null;
+          var ocrText = String(panelState.result.extractedText || '').trim();
+          if (!ocrText) {
+            ocrText = suggestions.map(function(item){ return String(item && item.evidence || '').trim(); }).filter(Boolean).join('\n');
+          }
+          return invoke('record_invoice_ocr_feedback', {
+            request: {
+              ocrText: ocrText,
+              supplierCandidate: supplierSuggestion ? String(supplierSuggestion.value || '') : '',
+              supplierId: values && values.supplierId ? String(values.supplierId) : '',
+              plantId: values && values.plantId ? String(values.plantId) : ''
+            }
+          }).then(function(){ return true; }).catch(function(){ return false; });
         }
 
         function runInvoiceOcrForTarget(options){
           var container = options && options.resultsContainer;
-          var aiContainer = options && options.aiResultsContainer;
           var target = options && options.target;
           if (!container || !target) return Promise.resolve(false);
-          if (aiContainer) aiContainer.innerHTML = '';
-          if (options && options.stateKey === 'new') invoiceNewLocalAiState = null;
-          if (options && options.stateKey === 'review') invoiceReviewLocalAiState = null;
           return Promise.resolve().then(function(){
             if (options.file) {
               return options.file.arrayBuffer().then(function(buffer){
@@ -2439,28 +2359,70 @@
           });
         }
 
-        function runLocalAiForTarget(options){
-          var container = options && options.resultsContainer;
-          var target = options && options.target;
-          var stateKey = options && options.stateKey;
-          if (!container || !target || !stateKey) return Promise.resolve(false);
-          var ocrState = stateKey === 'new' ? invoiceNewOcrState : invoiceReviewOcrState;
-          var extractedText = String(ocrState && ocrState.result && ocrState.result.extractedText || '').trim();
-          if (!extractedText) {
-            alert('Run Read invoice with OCR first so Local AI can review OCR text.');
+        function renderBatchInvoiceResults(result){
+          if (!invoiceBatchResults) return;
+          var entries = Array.isArray(result && result.entries) ? result.entries : [];
+          invoiceBatchResults.innerHTML =
+            '<div class="mini-card">' +
+              '<strong>Batch processing report</strong>' +
+              '<div class="muted" style="margin-top:.35rem">' + escapeHtml(result && result.message ? result.message : 'Batch processing finished.') + '</div>' +
+              '<div class="muted" style="margin-top:.35rem">Source folder: ' + escapeHtml(result && result.sourceFolder ? result.sourceFolder : '') + '</div>' +
+              (entries.length
+                ? '<div class="table-wrap" style="margin-top:.75rem"><table class="table"><thead><tr><th>File</th><th>Result</th><th>Reason</th></tr></thead><tbody>' + entries.map(function(entry){
+                    return '<tr>' +
+                      '<td>' + escapeHtml(entry && entry.fileName ? entry.fileName : '—') + '</td>' +
+                      '<td>' + escapeHtml(entry && entry.outcome ? entry.outcome : '—') + '</td>' +
+                      '<td>' + escapeHtml(entry && entry.reason ? entry.reason : '—') + '</td>' +
+                    '</tr>';
+                  }).join('') + '</tbody></table></div>'
+                : '<div class="muted" style="margin-top:.75rem">No files were processed.</div>'
+              ) +
+            '</div>';
+        }
+
+        function processAllInvoicesFromFolder(folderPath){
+          var invoke = getTauriInvoke();
+          if (!invoke || !desktopIsTauri) {
+            alert('PROCESS ALL INVOICES works only in the Windows desktop app.');
             return Promise.resolve(false);
           }
-          container.innerHTML = '<div class="muted">Local AI is checking OCR text… this can be slow on older PCs.</div>';
-          return reviewInvoiceOcrTextWithLocalAi(extractedText).then(function(result){
-            renderInvoiceLocalAiResult(container, stateKey, result, target);
-            setInvoiceStatusText(result && result.message ? result.message : 'Local AI review is ready.');
-            return true;
+          if (!folderPath) return Promise.resolve(false);
+          if (invoiceBatchResults) invoiceBatchResults.innerHTML = '<div class="muted">Processing invoice folder… Please wait until the report appears.</div>';
+          if (invoiceBatchBtn) invoiceBatchBtn.disabled = true;
+          return invoke('process_invoice_inbox_folder', { request: { folderPath: folderPath } }).then(function(result){
+            renderBatchInvoiceResults(result);
+            setInvoiceStatusText(result && result.message ? result.message : 'Batch invoice processing finished.');
+            return loadDesktopStateFromSqlite({ force: true }).then(function(){ return true; });
           }).catch(function(err){
-            container.innerHTML = '<div class="muted">Local AI review could not prepare suggestions.</div>';
-            var msg = 'Local AI review failed. ' + ((err && err.message) ? err.message : String(err));
+            var msg = 'Batch invoice processing failed. ' + ((err && err.message) ? err.message : String(err));
+            if (invoiceBatchResults) invoiceBatchResults.innerHTML = '<div class="muted">' + escapeHtml(msg) + '</div>';
             setInvoiceStatusText(msg);
             alert(msg);
             return false;
+          }).finally(function(){
+            if (invoiceBatchBtn) invoiceBatchBtn.disabled = !desktopIsTauri;
+          });
+        }
+
+        function chooseInvoiceBatchFolderAndProcess(){
+          if (!desktopIsTauri) {
+            alert('PROCESS ALL INVOICES works only in the Windows desktop app.');
+            return;
+          }
+          var invoke = getTauriInvoke();
+          if (!invoke) return;
+          invoke('plugin:dialog|open', {
+            directory: true,
+            multiple: false,
+            title: 'Choose the monthly invoice source folder'
+          }).then(function(selected){
+            var folderPath = Array.isArray(selected) ? selected[0] : selected;
+            if (!folderPath) return;
+            processAllInvoicesFromFolder(folderPath);
+          }).catch(function(err){
+            var msg = 'Could not choose the invoice source folder. ' + ((err && err.message) ? err.message : String(err));
+            setInvoiceStatusText(msg);
+            alert(msg);
           });
         }
 
@@ -2660,7 +2622,7 @@
             var tr = document.createElement('tr');
             var supName = supplierNameById(inv.supplierId) || '—';
             var plantName = plantNameById(inv.plantId) || 'Unknown plant';
-            var statusTxt = inv.status === 'posted' ? 'Posted' : 'Pending review';
+            var statusTxt = inv.status === 'posted' ? 'Posted' : (inv.needsReview ? 'Needs review' : 'Pending review');
             var docTxt = invoiceDocumentStatusText(inv);
             var dupTxt = inv.isDuplicateNumber ? ' <span class="badge">Possible duplicate</span>' : '';
             tr.innerHTML =
@@ -2788,7 +2750,7 @@
 
           modalTitle.textContent = 'Invoice review';
           modalBody.innerHTML =
-            '<div class="muted" style="margin-bottom:.5rem">Status: <strong>'+(posted ? 'Posted' : 'Pending review')+'</strong>'+(inv.isDuplicateNumber ? ' • <span class="badge">Possible duplicate invoice number</span>' : '')+'</div>' +
+            '<div class="muted" style="margin-bottom:.5rem">Status: <strong>'+(posted ? 'Posted' : (inv.needsReview ? 'Needs review' : 'Pending review'))+'</strong>'+(inv.isDuplicateNumber ? ' • <span class="badge">Possible duplicate invoice number</span>' : '')+'</div>' +
             '<div class="inline" style="flex-wrap:wrap;gap:.75rem">' +
               '<div class="field" style="min-width:220px;flex:1 1 220px"><label for="m-inv-supplier">Supplier</label><select id="m-inv-supplier"'+(posted ? ' disabled' : '')+'></select></div>' +
               '<div class="field" style="min-width:220px;flex:1 1 220px"><label for="m-inv-number">Invoice number</label><input id="m-inv-number" value="'+escapeAttr(inv.invoiceNumber || '')+'"'+(posted ? ' disabled' : '')+' autocomplete="off" /></div>' +
@@ -2813,11 +2775,9 @@
             '<div class="mini-card" style="margin-top:.75rem">' +
               '<div class="actions" style="margin:0;flex-wrap:wrap">' +
                 '<button type="button" class="btn" id="m-inv-ocr-btn"'+(desktopIsTauri ? '' : ' disabled')+'>Read invoice with OCR</button>' +
-                '<button type="button" class="btn" id="m-inv-ai-btn" disabled>Ask Local AI to check OCR fields</button>' +
                 '<span class="muted" id="m-inv-ocr-help">'+(desktopIsTauri ? 'Reads the selected replacement file first. If none is selected, it reads the saved attachment.' : 'Open this invoice in the Windows desktop app to use OCR safely.')+'</span>' +
               '</div>' +
               '<div id="m-inv-ocr-results" class="stack"></div>' +
-              '<div id="m-inv-ai-results" class="stack"></div>' +
             '</div>';
 
           var reviewSupplier = byId('m-inv-supplier');
@@ -2826,10 +2786,7 @@
           var docActions = byId('m-inv-doc-actions');
           var reviewReplacementInput = byId('m-inv-file');
           var reviewOcrBtn = byId('m-inv-ocr-btn');
-          var reviewAiBtn = byId('m-inv-ai-btn');
           var reviewOcrResults = byId('m-inv-ocr-results');
-          var reviewAiResults = byId('m-inv-ai-results');
-          if (reviewAiBtn) reviewAiBtn.disabled = !(desktopIsTauri && localAiReady);
           renderSupplierOptions(reviewSupplier, !posted);
           if (reviewSupplier) reviewSupplier.value = inv.supplierId || '';
           if (reviewPlant) {
@@ -2938,9 +2895,7 @@
           if (reviewReplacementInput) {
             reviewReplacementInput.addEventListener('change', function(){
               invoiceReviewOcrState = null;
-              invoiceReviewLocalAiState = null;
               if (reviewOcrResults) reviewOcrResults.innerHTML = '';
-              if (reviewAiResults) reviewAiResults.innerHTML = '';
             });
           }
           if (reviewOcrBtn) {
@@ -2958,13 +2913,14 @@
                 fileName: replacement ? replacement.name : (doc && doc.fileName ? doc.fileName : 'invoice-document'),
                 mimeType: replacement ? String(replacement.type || '') : (doc && doc.mimeType ? doc.mimeType : ''),
                 resultsContainer: reviewOcrResults,
-                aiResultsContainer: reviewAiResults,
                 target: {
                   supplierSelect: reviewSupplier,
+                  plantSelect: reviewPlant,
                   fields: {
                     invoiceNumber: byId('m-inv-number'),
                     invoiceDate: byId('m-inv-date'),
                     notes: byId('m-inv-notes'),
+                    plantId: reviewPlant,
                     netAmount: byId('m-inv-net'),
                     vatAmount: byId('m-inv-vat'),
                     totalCost: byId('m-inv-total')
@@ -2973,23 +2929,25 @@
               });
             });
           }
-          if (reviewAiBtn) {
-            reviewAiBtn.addEventListener('click', function(){
-              runLocalAiForTarget({
-                stateKey: 'review',
-                resultsContainer: reviewAiResults,
-                target: {
-                  supplierSelect: reviewSupplier,
-                  fields: {
-                    invoiceNumber: byId('m-inv-number'),
-                    invoiceDate: byId('m-inv-date'),
-                    notes: byId('m-inv-notes'),
-                    netAmount: byId('m-inv-net'),
-                    vatAmount: byId('m-inv-vat'),
-                    totalCost: byId('m-inv-total')
-                  }
-                }
-              });
+          if (reviewOcrResults && inv.ocrReview && Array.isArray(inv.ocrReview.suggestions) && inv.ocrReview.suggestions.length) {
+            renderInvoiceOcrResult(reviewOcrResults, 'review', {
+              message: 'Saved OCR suggestions from the last import/review are shown below. You can re-apply any of them or run OCR again.',
+              suggestions: inv.ocrReview.suggestions,
+              warnings: Array.isArray(inv.ocrReview.warnings) ? inv.ocrReview.warnings : [],
+              limitations: ['Run Read invoice with OCR again if you want to refresh these suggestions from the current attachment.'],
+              extractedText: ''
+            }, {
+              supplierSelect: reviewSupplier,
+              plantSelect: reviewPlant,
+              fields: {
+                invoiceNumber: byId('m-inv-number'),
+                invoiceDate: byId('m-inv-date'),
+                notes: byId('m-inv-notes'),
+                plantId: reviewPlant,
+                netAmount: byId('m-inv-net'),
+                vatAmount: byId('m-inv-vat'),
+                totalCost: byId('m-inv-total')
+              }
             });
           }
 
@@ -3055,6 +3013,7 @@
               state.invoices[idx] = inv;
               save(LS_KEYS.invoices, state.invoices);
               refreshInvoiceUi();
+              recordInvoiceOcrFeedback(invoiceReviewOcrState, { supplierId: supplierId, plantId: plantId });
               modal.close('submit');
             }
 
@@ -3194,13 +3153,14 @@
               stateKey: 'new',
               file: file,
               resultsContainer: invoiceOcrResults,
-              aiResultsContainer: invoiceAiResults,
               target: {
                 supplierSelect: byId('inv-supplier'),
+                plantSelect: byId('inv-plant'),
                 fields: {
                   invoiceNumber: byId('inv-number'),
                   invoiceDate: byId('inv-date'),
                   notes: byId('inv-notes'),
+                  plantId: byId('inv-plant'),
                   netAmount: byId('inv-net'),
                   vatAmount: byId('inv-vat'),
                   totalCost: byId('inv-total')
@@ -3209,27 +3169,6 @@
             });
           });
           invoiceOcrBtn._bound = true;
-        }
-
-        if (invoiceAiBtn && !invoiceAiBtn._bound) {
-          invoiceAiBtn.addEventListener('click', function(){
-            runLocalAiForTarget({
-              stateKey: 'new',
-              resultsContainer: invoiceAiResults,
-              target: {
-                supplierSelect: byId('inv-supplier'),
-                fields: {
-                  invoiceNumber: byId('inv-number'),
-                  invoiceDate: byId('inv-date'),
-                  notes: byId('inv-notes'),
-                  netAmount: byId('inv-net'),
-                  vatAmount: byId('inv-vat'),
-                  totalCost: byId('inv-total')
-                }
-              }
-            });
-          });
-          invoiceAiBtn._bound = true;
         }
 
         if (invoiceForm && !invoiceForm._bound) {
@@ -3291,6 +3230,7 @@
               record.duplicateOfIds = duplicates.map(function(x){ return x.id; });
               record.isDuplicateNumber = duplicates.length > 0;
               var warning = saveInvoiceRecordWithDocument(record, documentPayload || null);
+              recordInvoiceOcrFeedback(invoiceNewOcrState, { supplierId: supplierId, plantId: plantId });
               invoiceForm.reset();
               resetInvoiceFileUi();
                setInvoiceStatusText(warning || (documentPayload && documentPayload.managedRelativePath ? 'Invoice and desktop attachment saved.' : 'Invoice saved.'));
@@ -4492,12 +4432,6 @@
         var desktopSaveChain = Promise.resolve();
         var desktopMessageText = '';
         var desktopBackupsFolderPath = '';
-        var localAiEnabledToggle = byId('local-ai-enabled-toggle');
-        var localAiModelInput = byId('local-ai-model');
-        var localAiModelDirInput = byId('local-ai-model-dir');
-        var localAiSaveBtn = byId('local-ai-save-btn');
-        var localAiRefreshBtn = byId('local-ai-refresh-btn');
-        var localAiStatusText = byId('local-ai-status-text');
 
         function getTauriInvoke(){
           if (!window || !window.__TAURI__ || !window.__TAURI__.core || typeof window.__TAURI__.core.invoke !== 'function') return null;
@@ -4525,89 +4459,7 @@
           if (desktopImportBtn) desktopImportBtn.disabled = !enabled;
           if (desktopExportDbBtn) desktopExportDbBtn.disabled = !enabled;
           if (desktopRestoreDbBtn) desktopRestoreDbBtn.disabled = !enabled;
-        }
-
-        function setLocalAiButtonsFromStatus(){
-          if (invoiceAiBtn) invoiceAiBtn.disabled = !(desktopIsTauri && localAiReady);
-        }
-
-        function renderLocalAiBrowserMode(){
-          localAiReady = false;
-          if (localAiEnabledToggle) localAiEnabledToggle.checked = false;
-          if (localAiEnabledToggle) localAiEnabledToggle.disabled = true;
-          if (localAiModelInput) localAiModelInput.disabled = true;
-          if (localAiModelDirInput) localAiModelDirInput.disabled = true;
-          if (localAiSaveBtn) localAiSaveBtn.disabled = true;
-          if (localAiRefreshBtn) localAiRefreshBtn.disabled = true;
-          if (localAiStatusText) localAiStatusText.textContent = 'Local AI status is available only in the Windows desktop app. Browser mode keeps normal OCR/manual workflow.';
-          setLocalAiButtonsFromStatus();
-        }
-
-        function refreshLocalAiStatus(options){
-          options = options || {};
-          var syncInputs = !!options.syncInputs;
-          var invoke = getTauriInvoke();
-          if (!invoke || !desktopIsTauri) {
-            renderLocalAiBrowserMode();
-            return Promise.resolve(null);
-          }
-          if (localAiStatusText) localAiStatusText.textContent = 'Checking local Ollama status…';
-          if (localAiRefreshBtn) localAiRefreshBtn.disabled = true;
-          if (localAiSaveBtn) localAiSaveBtn.disabled = true;
-          return invoke('get_local_ai_status').then(function(status){
-            if (localAiEnabledToggle) {
-              localAiEnabledToggle.disabled = false;
-              localAiEnabledToggle.checked = !!(status && status.enabled);
-            }
-            if (syncInputs && localAiModelInput) {
-              localAiModelInput.disabled = false;
-              localAiModelInput.value = String(status && status.model || 'qwen2.5:1.5b-instruct-q4_K_M');
-            } else if (localAiModelInput) {
-              localAiModelInput.disabled = false;
-            }
-            if (syncInputs && localAiModelDirInput) {
-              localAiModelDirInput.disabled = false;
-              localAiModelDirInput.value = String(status && status.modelDirectory || 'C:\\OllamaModels');
-            } else if (localAiModelDirInput) {
-              localAiModelDirInput.disabled = false;
-            }
-            localAiReady = !!(status && status.ready && status.enabled && status.endpointReachable && status.modelInstalled);
-            if (localAiStatusText) localAiStatusText.textContent = String(status && status.message || 'Local AI status unavailable.');
-            setLocalAiButtonsFromStatus();
-            return status;
-          }).catch(function(err){
-            localAiReady = false;
-            setLocalAiButtonsFromStatus();
-            if (localAiStatusText) localAiStatusText.textContent = 'Local AI status check failed: ' + ((err && err.message) ? err.message : String(err));
-            return null;
-          }).finally(function(){
-            if (localAiRefreshBtn) localAiRefreshBtn.disabled = false;
-            if (localAiSaveBtn) localAiSaveBtn.disabled = false;
-          });
-        }
-
-        function saveLocalAiSettingsFromUi(){
-          var invoke = getTauriInvoke();
-          if (!invoke || !desktopIsTauri) {
-            renderLocalAiBrowserMode();
-            return Promise.resolve(false);
-          }
-          var update = {
-            enabled: !!(localAiEnabledToggle && localAiEnabledToggle.checked),
-            model: String(localAiModelInput && localAiModelInput.value || '').trim(),
-            modelDirectory: String(localAiModelDirInput && localAiModelDirInput.value || '').trim()
-          };
-          if (localAiStatusText) localAiStatusText.textContent = 'Saving Local AI settings…';
-          return invoke('update_local_ai_settings', { update: update }).then(function(){
-            return refreshLocalAiStatus({ syncInputs: true }).then(function(){
-              return true;
-            });
-          }).catch(function(err){
-            localAiReady = false;
-            setLocalAiButtonsFromStatus();
-            if (localAiStatusText) localAiStatusText.textContent = 'Could not save Local AI settings: ' + ((err && err.message) ? err.message : String(err));
-            return false;
-          });
+          if (invoiceBatchBtn) invoiceBatchBtn.disabled = !enabled;
         }
 
         function renderDesktopBrowserMode(){
@@ -4620,9 +4472,9 @@
           if (desktopBackupStatus) desktopBackupStatus.textContent = 'SQLite backup folder is available only in desktop mode.';
           if (invoiceFileHelp) invoiceFileHelp.textContent = 'Storage in the browser is limited. Large files may not be saved locally; invoice details will still be saved.';
           if (invoiceOcrBtn) invoiceOcrBtn.disabled = true;
-          setLocalAiButtonsFromStatus();
+          if (invoiceBatchBtn) invoiceBatchBtn.disabled = true;
           if (invoiceOcrHelp) invoiceOcrHelp.textContent = 'Read invoice with OCR is available only in the Windows desktop app.';
-          renderLocalAiBrowserMode();
+          if (invoiceBatchResults) invoiceBatchResults.innerHTML = '<div class="muted">PROCESS ALL INVOICES works only in the Windows desktop app because it needs local file access and SQLite.</div>';
           setDesktopMessageText('You can keep using this browser app as normal. To use SQLite, open this same app through the Windows desktop app.');
         }
 
@@ -4651,7 +4503,7 @@
             }
             if (invoiceFileHelp) invoiceFileHelp.textContent = 'In the Windows desktop app, the selected PDF or image will be copied into this app’s managed documents folder when you save the invoice.';
             if (invoiceOcrBtn) invoiceOcrBtn.disabled = false;
-            setLocalAiButtonsFromStatus();
+            if (invoiceBatchBtn) invoiceBatchBtn.disabled = false;
             if (invoiceOcrHelp) invoiceOcrHelp.textContent = 'Read PDF text locally, or try local Windows OCR for PNG and JPG/JPEG invoice images. Scanned PDFs may still need manual entry.';
             if (!desktopMessageText) {
               setDesktopMessageText('Desktop mode uses SQLite as the live data store after load, import or migration. Browser mode still uses browser storage.');
@@ -4659,11 +4511,10 @@
               desktopMessage.textContent = desktopMessageText;
             }
             setDesktopButtonState(true);
-            return refreshLocalAiStatus({ syncInputs: true });
+            return true;
           }).catch(function(err){
             renderDesktopError(err);
             setDesktopButtonState(false);
-            renderLocalAiBrowserMode();
           });
         }
 
@@ -5165,10 +5016,7 @@
           if (desktopImportBtn && !desktopImportBtn._bound) { desktopImportBtn.addEventListener('click', importBrowserBackupIntoSqlite); desktopImportBtn._bound = true; }
           if (desktopExportDbBtn && !desktopExportDbBtn._bound) { desktopExportDbBtn.addEventListener('click', createSqliteBackupCopy); desktopExportDbBtn._bound = true; }
           if (desktopRestoreDbBtn && !desktopRestoreDbBtn._bound) { desktopRestoreDbBtn.addEventListener('click', restoreDesktopBackup); desktopRestoreDbBtn._bound = true; }
-          if (localAiRefreshBtn && !localAiRefreshBtn._bound) { localAiRefreshBtn.addEventListener('click', refreshLocalAiStatus); localAiRefreshBtn._bound = true; }
-          if (localAiSaveBtn && !localAiSaveBtn._bound) { localAiSaveBtn.addEventListener('click', saveLocalAiSettingsFromUi); localAiSaveBtn._bound = true; }
-          if (localAiEnabledToggle && !localAiEnabledToggle._bound) { localAiEnabledToggle.addEventListener('change', saveLocalAiSettingsFromUi); localAiEnabledToggle._bound = true; }
-          renderLocalAiBrowserMode();
+          if (invoiceBatchBtn && !invoiceBatchBtn._bound) { invoiceBatchBtn.addEventListener('click', chooseInvoiceBatchFolderAndProcess); invoiceBatchBtn._bound = true; }
 
           var hash = (location.hash || '').replace('#','');
           var mainId = (['hire','plant-sites','maintenance','invoices','reports','help'].indexOf(hash) >= 0) ? hash : 'hire';
