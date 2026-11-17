@@ -1,0 +1,452 @@
+{
+  "communities": {
+    "0": [
+      "apphandle",
+      "src_tauri_src_lib_attachmentactionresult",
+      "src_tauri_src_lib_backupresult",
+      "src_tauri_src_lib_batch_save_failure_leaves_source_file_untouched",
+      "src_tauri_src_lib_batchinvoiceprocessrequest",
+      "src_tauri_src_lib_copy_dir_recursive",
+      "src_tauri_src_lib_correction_rules_round_trip_through_backup_restore",
+      "src_tauri_src_lib_create_desktop_backup",
+      "src_tauri_src_lib_desktop_status",
+      "src_tauri_src_lib_desktopstatus",
+      "src_tauri_src_lib_ensure_schema",
+      "src_tauri_src_lib_ensure_storage_and_schema",
+      "src_tauri_src_lib_export_sqlite_backup",
+      "src_tauri_src_lib_get_data_block",
+      "src_tauri_src_lib_import_browser_backup_into_sqlite",
+      "src_tauri_src_lib_importresult",
+      "src_tauri_src_lib_iso_timestamp_string",
+      "src_tauri_src_lib_list_files_recursive",
+      "src_tauri_src_lib_live_counts",
+      "src_tauri_src_lib_livestateloadresult",
+      "src_tauri_src_lib_load_live_state_from_sqlite",
+      "src_tauri_src_lib_open_db",
+      "src_tauri_src_lib_open_invoice_document",
+      "src_tauri_src_lib_open_path_with_system_default",
+      "src_tauri_src_lib_process_invoice_inbox_folder",
+      "src_tauri_src_lib_read_invoice_document",
+      "src_tauri_src_lib_record_invoice_ocr_feedback",
+      "src_tauri_src_lib_relative_path_string",
+      "src_tauri_src_lib_remove_invoice_document",
+      "src_tauri_src_lib_remove_path_if_exists",
+      "src_tauri_src_lib_restore_desktop_backup",
+      "src_tauri_src_lib_restore_desktop_backup_at_paths",
+      "src_tauri_src_lib_restore_round_trip_recovers_prior_database_and_documents",
+      "src_tauri_src_lib_restoreresult",
+      "src_tauri_src_lib_run",
+      "src_tauri_src_lib_save_live_state_to_sqlite",
+      "src_tauri_src_lib_saveresult",
+      "src_tauri_src_lib_storage_paths",
+      "src_tauri_src_lib_unix_timestamp_string",
+      "src_tauri_src_lib_upsert_ocr_correction_rule"
+    ],
+    "1": [
+      "command",
+      "date",
+      "deserialize",
+      "digest",
+      "engine",
+      "format_description",
+      "fs",
+      "json",
+      "manager",
+      "offsetdatetime",
+      "openoptions",
+      "optionalextension",
+      "params",
+      "path",
+      "pathbuf",
+      "rfc3339",
+      "serialize",
+      "sha256",
+      "src_tauri_src_lib",
+      "src_tauri_src_lib_attachment_reference_count_protects_shared_files",
+      "src_tauri_src_lib_backup_format_version",
+      "src_tauri_src_lib_clear_removed_local_ai_metadata",
+      "src_tauri_src_lib_managed_invoice_dir",
+      "src_tauri_src_lib_max_batch_invoice_files",
+      "src_tauri_src_lib_max_invoice_extract_text_chars",
+      "src_tauri_src_lib_max_invoice_read_bytes",
+      "src_tauri_src_lib_normalize_backup_data_adds_missing_defaults",
+      "src_tauri_src_lib_normalize_whitespace_line",
+      "src_tauri_src_lib_read_app_meta_value",
+      "src_tauri_src_lib_removed_local_ai_settings_are_cleared",
+      "src_tauri_src_lib_state_array_keys",
+      "src_tauri_src_lib_state_keys",
+      "src_tauri_src_lib_state_object_keys",
+      "src_tauri_src_lib_value_f64",
+      "src_tauri_src_lib_value_str",
+      "super",
+      "write"
+    ],
+    "2": [
+      "connection",
+      "map",
+      "src_tauri_src_lib_analysis_context_from_data",
+      "src_tauri_src_lib_batch_processing_detects_duplicates_by_checksum",
+      "src_tauri_src_lib_batch_processing_saves_document_before_removing_source",
+      "src_tauri_src_lib_clear_import_tables",
+      "src_tauri_src_lib_count_other_document_references",
+      "src_tauri_src_lib_default_state_value",
+      "src_tauri_src_lib_find_duplicate_by_checksum",
+      "src_tauri_src_lib_find_duplicate_by_supplier_invoice",
+      "src_tauri_src_lib_has_live_data",
+      "src_tauri_src_lib_insert_backup_data",
+      "src_tauri_src_lib_load_analysis_context",
+      "src_tauri_src_lib_load_live_state",
+      "src_tauri_src_lib_load_live_state_falls_back_to_legacy_tables",
+      "src_tauri_src_lib_normalize_backup_data",
+      "src_tauri_src_lib_persist_live_state",
+      "src_tauri_src_lib_process_batch_invoice_file",
+      "src_tauri_src_lib_read_app_state",
+      "src_tauri_src_lib_read_json_rows_as_array",
+      "src_tauri_src_lib_read_json_rows_as_object",
+      "src_tauri_src_lib_read_legacy_state",
+      "src_tauri_src_lib_replace_live_state",
+      "src_tauri_src_lib_replace_live_state_round_trips_full_state",
+      "src_tauri_src_lib_sample_state",
+      "src_tauri_src_lib_sample_state_with_managed_document",
+      "src_tauri_src_lib_string_id_or_fallback",
+      "src_tauri_src_lib_supplier_detection_excludes_hiload_and_due_date",
+      "src_tauri_src_lib_value_as_array",
+      "src_tauri_src_lib_value_as_array_mut",
+      "src_tauri_src_lib_value_as_object",
+      "src_tauri_src_lib_value_as_object_mut",
+      "src_tauri_src_lib_write_app_state",
+      "transaction",
+      "value"
+    ],
+    "3": [
+      "src_tauri_src_lib_apppaths",
+      "src_tauri_src_lib_attachmentimportresult",
+      "src_tauri_src_lib_backup_manifest_rejects_unsafe_paths",
+      "src_tauri_src_lib_backup_manifest_validates_backup_contents",
+      "src_tauri_src_lib_backup_name_timestamp",
+      "src_tauri_src_lib_ensure_relative_safe_path",
+      "src_tauri_src_lib_extension_from_mime_type",
+      "src_tauri_src_lib_extract_image_text",
+      "src_tauri_src_lib_import_invoice_document_bytes",
+      "src_tauri_src_lib_make_temp_invoice_read_path",
+      "src_tauri_src_lib_managed_document_paths_are_sanitized_and_confined",
+      "src_tauri_src_lib_managed_document_relative_path",
+      "src_tauri_src_lib_managed_invoice_documents_dir",
+      "src_tauri_src_lib_next_batch_invoice_id",
+      "src_tauri_src_lib_read_backup_manifest",
+      "src_tauri_src_lib_resolve_managed_document_path",
+      "src_tauri_src_lib_run_powershell_image_ocr",
+      "src_tauri_src_lib_safe_display_file_name",
+      "src_tauri_src_lib_sanitize_path_component",
+      "src_tauri_src_lib_save_managed_invoice_document",
+      "src_tauri_src_lib_save_managed_invoice_document_in_area",
+      "src_tauri_src_lib_sha256_file",
+      "src_tauri_src_lib_sha256_hex",
+      "src_tauri_src_lib_temp_app_paths",
+      "src_tauri_src_lib_write_file_atomic"
+    ],
+    "4": [
+      "src_tauri_tauri_conf",
+      "src_tauri_tauri_conf_app",
+      "src_tauri_tauri_conf_app_security",
+      "src_tauri_tauri_conf_app_windows",
+      "src_tauri_tauri_conf_app_withglobaltauri",
+      "src_tauri_tauri_conf_build",
+      "src_tauri_tauri_conf_build_beforebuildcommand",
+      "src_tauri_tauri_conf_build_beforedevcommand",
+      "src_tauri_tauri_conf_build_devurl",
+      "src_tauri_tauri_conf_build_frontenddist",
+      "src_tauri_tauri_conf_bundle",
+      "src_tauri_tauri_conf_bundle_active",
+      "src_tauri_tauri_conf_bundle_icon",
+      "src_tauri_tauri_conf_bundle_targets",
+      "src_tauri_tauri_conf_bundle_windows",
+      "src_tauri_tauri_conf_identifier",
+      "src_tauri_tauri_conf_productname",
+      "src_tauri_tauri_conf_schema",
+      "src_tauri_tauri_conf_security_csp",
+      "src_tauri_tauri_conf_version",
+      "src_tauri_tauri_conf_windows_wix",
+      "src_tauri_tauri_conf_wix_language"
+    ],
+    "5": [
+      "package",
+      "package_devdependencies",
+      "package_devdependencies_http_server",
+      "package_devdependencies_tauri_apps_cli",
+      "package_name",
+      "package_private",
+      "package_scripts",
+      "package_scripts_build_frontend",
+      "package_scripts_dev",
+      "package_scripts_tauri",
+      "package_scripts_tauri_build",
+      "package_scripts_tauri_dev",
+      "package_type",
+      "package_version",
+      "ref_http_server",
+      "ref_tauri_apps_cli"
+    ],
+    "6": [
+      "src_tauri_src_lib_apply_supplier_history_rule",
+      "src_tauri_src_lib_choose_plant_match",
+      "src_tauri_src_lib_contains_normalized_text",
+      "src_tauri_src_lib_find_supplier_id_by_name",
+      "src_tauri_src_lib_invoiceanalysiscontext",
+      "src_tauri_src_lib_load_ocr_correction_rules",
+      "src_tauri_src_lib_normalize_for_match",
+      "src_tauri_src_lib_ocrcorrectionfeedbackrequest",
+      "src_tauri_src_lib_ocrcorrectionrule",
+      "src_tauri_src_lib_plant_aliases",
+      "src_tauri_src_lib_plant_rule_boost",
+      "src_tauri_src_lib_plantmatch",
+      "src_tauri_src_lib_record_invoice_ocr_feedback_inner"
+    ],
+    "7": [
+      "src_tauri_src_lib_candidate_segments",
+      "src_tauri_src_lib_choose_invoice_date",
+      "src_tauri_src_lib_choose_invoice_number",
+      "src_tauri_src_lib_choose_notes",
+      "src_tauri_src_lib_choose_supplier_candidate",
+      "src_tauri_src_lib_collect_labeled_line_matches",
+      "src_tauri_src_lib_find_first_date",
+      "src_tauri_src_lib_is_hiload_identity",
+      "src_tauri_src_lib_is_probable_company_line",
+      "src_tauri_src_lib_linevaluematch",
+      "src_tauri_src_lib_looks_like_invoice_number",
+      "src_tauri_src_lib_parse_amount_candidate",
+      "src_tauri_src_lib_parse_date_candidate"
+    ],
+    "8": [
+      "src_tauri_src_lib_batchinvoiceprocessentry",
+      "src_tauri_src_lib_batchinvoiceprocessresult",
+      "src_tauri_src_lib_detect_invoice_read_kind",
+      "src_tauri_src_lib_invoice_read_kind_accepts_required_formats",
+      "src_tauri_src_lib_invoicereadkind",
+      "src_tauri_src_lib_invoicereadkind_jpeg",
+      "src_tauri_src_lib_invoicereadkind_pdf",
+      "src_tauri_src_lib_invoicereadkind_png",
+      "src_tauri_src_lib_invoicetextread",
+      "src_tauri_src_lib_mime_type_from_kind",
+      "src_tauri_src_lib_process_invoice_inbox_folder_inner",
+      "src_tauri_src_lib_read_invoice_text_from_bytes"
+    ],
+    "9": [
+      "src_tauri_src_lib_amountmatch",
+      "src_tauri_src_lib_build_invoice_analysis",
+      "src_tauri_src_lib_choose_best_amount",
+      "src_tauri_src_lib_collect_amount_matches",
+      "src_tauri_src_lib_invoice_analysis_extracts_common_fields",
+      "src_tauri_src_lib_invoice_number_requires_invoice_label_context",
+      "src_tauri_src_lib_line_has_label",
+      "src_tauri_src_lib_plant_matching_does_not_guess_when_multiple_aliases_conflict",
+      "src_tauri_src_lib_supplier_history_is_only_a_suggestion_not_an_override",
+      "src_tauri_src_lib_total_detection_prefers_final_total_and_flags_mismatch"
+    ],
+    "10": [
+      "src_tauri_src_lib_base_name_or_fallback",
+      "src_tauri_src_lib_invoice_read_rejects_oversized_files_and_keeps_state_keys_unchanged",
+      "src_tauri_src_lib_invoiceanalysis",
+      "src_tauri_src_lib_invoicefieldsuggestion",
+      "src_tauri_src_lib_invoicereadrequest",
+      "src_tauri_src_lib_invoicereadresult",
+      "src_tauri_src_lib_load_invoice_read_bytes",
+      "src_tauri_src_lib_normalize_invoice_text",
+      "src_tauri_src_lib_read_invoice_document_inner",
+      "src_tauri_src_lib_truncate_chars"
+    ],
+    "11": [
+      "src_tauri_capabilities_default",
+      "src_tauri_capabilities_default_description",
+      "src_tauri_capabilities_default_identifier",
+      "src_tauri_capabilities_default_permissions",
+      "src_tauri_capabilities_default_schema",
+      "src_tauri_capabilities_default_windows"
+    ],
+    "12": [
+      "src_tauri_src_lib_backupdocumentsmanifest",
+      "src_tauri_src_lib_backupfilemanifest",
+      "src_tauri_src_lib_backupmanifest"
+    ],
+    "13": [
+      "ref_node_fs",
+      "scripts_prepare_dist"
+    ],
+    "14": [
+      "src_tauri_build",
+      "src_tauri_build_main"
+    ],
+    "15": [
+      "src_tauri_src_main",
+      "src_tauri_src_main_main"
+    ],
+    "16": [
+      "pkg_hiload_plant_maintenance"
+    ]
+  },
+  "cohesion": {
+    "0": 0.1076923076923077,
+    "1": 0.057057057057057055,
+    "2": 0.17478991596638654,
+    "3": 0.15,
+    "4": 0.09090909090909091,
+    "5": 0.14166666666666666,
+    "6": 0.23076923076923078,
+    "7": 0.2692307692307692,
+    "8": 0.19696969696969696,
+    "9": 0.2222222222222222,
+    "10": 0.2222222222222222,
+    "11": 0.3333333333333333,
+    "12": 1.0,
+    "13": 1.0,
+    "14": 1.0,
+    "15": 1.0,
+    "16": 1.0
+  },
+  "gods": [
+    {
+      "id": "src_tauri_src_lib_process_batch_invoice_file",
+      "label": "process_batch_invoice_file()",
+      "degree": 22
+    },
+    {
+      "id": "src_tauri_src_lib_ensure_storage_and_schema",
+      "label": "ensure_storage_and_schema()",
+      "degree": 21
+    },
+    {
+      "id": "src_tauri_src_lib_build_invoice_analysis",
+      "label": "build_invoice_analysis()",
+      "degree": 21
+    },
+    {
+      "id": "src_tauri_src_lib_open_db",
+      "label": "open_db()",
+      "degree": 18
+    },
+    {
+      "id": "src_tauri_src_lib_apppaths",
+      "label": "AppPaths",
+      "degree": 17
+    },
+    {
+      "id": "src_tauri_src_lib_load_live_state",
+      "label": "load_live_state()",
+      "degree": 17
+    },
+    {
+      "id": "src_tauri_src_lib_create_desktop_backup",
+      "label": "create_desktop_backup()",
+      "degree": 15
+    },
+    {
+      "id": "src_tauri_src_lib_ensure_schema",
+      "label": "ensure_schema()",
+      "degree": 15
+    },
+    {
+      "id": "src_tauri_src_lib_restore_desktop_backup_at_paths",
+      "label": "restore_desktop_backup_at_paths()",
+      "degree": 15
+    },
+    {
+      "id": "src_tauri_src_lib_replace_live_state",
+      "label": "replace_live_state()",
+      "degree": 14
+    }
+  ],
+  "surprises": [
+    {
+      "source": "create_desktop_backup()",
+      "target": "backup_name_timestamp()",
+      "source_files": [
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/lib.rs"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "note": "Bridges community 0 → community 3"
+    },
+    {
+      "source": "attachment_reference_count_protects_shared_files()",
+      "target": "count_other_document_references()",
+      "source_files": [
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/lib.rs"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "note": "Bridges community 1 → community 2"
+    },
+    {
+      "source": "batch_processing_saves_document_before_removing_source()",
+      "target": "resolve_managed_document_path()",
+      "source_files": [
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/lib.rs"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "note": "Bridges community 2 → community 3"
+    },
+    {
+      "source": "supplier_history_is_only_a_suggestion_not_an_override()",
+      "target": "normalize_for_match()",
+      "source_files": [
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/lib.rs"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "note": "Bridges community 6 → community 9"
+    },
+    {
+      "source": "DesktopStatus",
+      "target": "Value",
+      "source_files": [
+        "src-tauri/src/lib.rs",
+        ""
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "note": "Bridges community 0 → community 2"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `InvoiceReadKind` connect `Invoice inbox batch processing` to `Rust crate imports`?",
+      "why": "High betweenness centrality (0.019) - this node is a cross-community bridge."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `hiload_plant_maintenance`, `Jpeg`, `Pdf` to the rest of the system?",
+      "why": "4 weakly-connected nodes found - possible missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Backup & desktop status` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.1076923076923077 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `build_invoice_analysis()` connect `Invoice amount analysis` to `Rust crate imports`, `Data storage & duplicates`, `OCR corrections & plant matching`, `Invoice field parsing`, `Invoice document reading`?",
+      "why": "High betweenness centrality (0.003) - this node is a cross-community bridge."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Rust crate imports` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.057057057057057055 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Tauri app config` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.09090909090909091 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `npm package config` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.14166666666666666 - nodes in this community are weakly interconnected."
+    }
+  ]
+}
